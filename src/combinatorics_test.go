@@ -5,25 +5,6 @@ import (
     "fmt"
 )
 
-func testEqLists(a, b []int) bool {
-
-    // If one is nil, the other must also be nil.
-    if (a == nil) != (b == nil) { 
-        return false; 
-    }
-
-    if len(a) != len(b) {
-        return false
-    }
-
-    for i := range a {
-        if a[i] != b[i] {
-            return false
-        }
-    }
-
-    return true
-}
 
 func TestBasepExpansion(t *testing.T) {
 
@@ -37,14 +18,13 @@ func TestBasepExpansion(t *testing.T) {
 	}
     for _, table := range tables {
         output := basepExpansion(table.n, table.p, 0)
-        if !testEqLists(output, table.output) {
+        if !eqListsQ(output, table.output) {
             t.Errorf("Ran basepExpansion(%v,%v) expected %v got %v", table.n, table.p, table.output, output)
         }
     }
 }
 
 func TestDirectBinomial(t *testing.T) {
-
 	tables := []struct {
 		n int
 		k int
@@ -150,30 +130,11 @@ func TestXiDegrees(t *testing.T) {
     
     for _, table := range tables {
         output := XiDegrees(table.n, table.p, table.reverse)
-        if !testEqLists(output, table.output) {
+        if !eqListsQ(output, table.output) {
             t.Errorf("Ran XiDegrees(%v, %v, %v) expected %v, got %v", table.n, table.p, table.reverse, table.output, output)
         }
     }   
     
-}
-
-func CheckGeneratorOfListsOutput(t *testing.T, gen <- chan []int, gen_name string, desired_output [][]int){
-    output_strings := make(map[string]int)
-    for _, tuple := range desired_output {
-        output_strings[fmt.Sprint(tuple)] ++
-    }
-    for tuple := range gen {
-        str_tuple := fmt.Sprint(tuple)
-        if output_strings[str_tuple] == 0 {
-            t.Errorf("Unexpected result %v appeared in generator %v. Was expecting the multiset %v.", tuple, gen_name, desired_output)
-        }
-        output_strings[str_tuple] --
-    }    
-    for k, v := range output_strings {
-        if v > 0 {
-            t.Errorf("Expected result %v in generator %v but it didn't appear. Was expecting the multiset %v.", k, gen_name, desired_output)
-        }
-    }
 }
 
 func TestWeightedIntegerVectors(t *testing.T) {
@@ -188,9 +149,9 @@ func TestWeightedIntegerVectors(t *testing.T) {
     } 
      
     for _, table := range tables {
+        call_str := fmt.Sprintf("WeightedIntegerVectors(%v, %v)", table.n, table.l)
         gen := WeightedIntegerVectors(table.n, table.l)
-        gen_name := fmt.Sprintf("WeightedIntegerVectors(%v, %v)", table.n, table.l)
-        CheckGeneratorOfListsOutput(t, gen, gen_name, table.output)
+        checkGeneratorOfListsOutput(t, call_str, table.output, gen)
     }    
 }
 
@@ -206,9 +167,9 @@ func TestRestrictedPartitions(t *testing.T) {
         {10, []int{6,4,2,2},[][]int{[]int{6,4}, []int{6, 2, 2}}},
     }
     for _, table := range tables {
+        call_str := fmt.Sprintf("RestrictedPartitions(%v, %v)", table.n, table.l)
         gen := RestrictedPartitions(table.n, table.l)
-        gen_name := fmt.Sprintf("RestrictedPartitions(%v, %v)", table.n, table.l)
-        CheckGeneratorOfListsOutput(t, gen, gen_name, table.output)
+        checkGeneratorOfListsOutput(t, call_str, table.output, gen)
     }    
 
 }

@@ -1,6 +1,15 @@
 package main
 
-import "fmt"
+//import "fmt"
+
+func MinusOneToTheN(n int) int {
+    return -(n % 2 * 2 - 1) 
+}
+
+func ModPositive(n, p int) int {
+    return ((n % p) + p) % p
+}
+
 
 func lengthOfBasepExpansion(n, p int) int {
     i := 0
@@ -304,8 +313,8 @@ func RestrictedPartitions(n int, l []int) <- chan []int {
 }
 
 
-func main() {
-    for partition := range RestrictedPartitions(10, []int{6,4,2,2}){        
-        fmt.Println("result: ", partition)
-    }   
-}
+//func main() {
+//    for partition := range RestrictedPartitions(10, []int{6,4,2,2}){        
+//        fmt.Println("result: ", partition)
+//    }   
+//}
