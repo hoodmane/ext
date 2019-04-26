@@ -6,6 +6,23 @@ func MinusOneToTheN(n int) int {
     return -(n % 2 * 2 - 1) 
 }
 
+func pow(a, b int) int {
+    res := 1
+    for ; b > 0 ; {
+        if b & 1 != 0 {
+            res *= a
+        }
+        a *= a
+        b >>= 1;
+    }
+    return res;
+}
+
+func p_to_the_n_minus_1_over_p_minus_1(p, n int) int {
+    return (pow(p, n) - 1) / (p - 1);
+}
+
+
 func ModPositive(n, p int) int {
     return ((n % p) + p) % p
 }
@@ -142,15 +159,9 @@ func Binomial(n, k, p int) int {
     }
 }
 
-//Reverse a list of integers in place
-func ReverseInPlace(l []int) {
-	for i, j := 0, len(l)-1; i < j; i, j = i+1, j-1 {
-		l[i], l[j] = l[j], l[i]
-	}
-}
 
 //Get the degrees of the xi_i's that occur in dimension at most n
-func XiDegrees(n, p int, reverse_output bool) []int {
+func XiDegrees(n, p int) []int {
     if n <= 0 {
         return []int {}
     }
@@ -165,13 +176,20 @@ func XiDegrees(n, p int, reverse_output bool) []int {
     result := make([]int, xi_max - 1)
     entry := 0
     p_to_the_d := 1
-    for d := 0; d < xi_max - 1; d++ {
+    for i := 0; i < xi_max - 1; i++ {
         entry += p_to_the_d
         p_to_the_d *= p    
-        result[d] = entry
+        result[i] = entry
     }
-    if reverse_output {
-        ReverseInPlace(result)
+    return result
+}
+
+func TauDegrees(n, p int) []int {
+    xi_degs := XiDegrees((n - 1)/(2*(p-1)), p)
+    result := make([]int, len(xi_degs) + 1)
+    copy(result[1:], xi_degs)
+    for idx, d := range result {
+        result[idx] = 1 + 2*(p - 1)*d
     }
     return result
 }
@@ -241,11 +259,11 @@ func WeightedIntegerVectorsGeneral(n int, l []int, max_weight int) <-chan []int 
             return
         }
         
-        k := 0
-        cur[0], _ = min_if_b_not_zero_else_a(n / l[k], max_weight)
-        cur[0]++ 
-        rem := n - cur[0] * l[k] // Amount remaining
-        for ; k >= 0 ; {
+        k := len(l) - 1
+        cur[k], _ = min_if_b_not_zero_else_a(n / l[k], max_weight)
+        cur[k]++ 
+        rem := n - cur[k] * l[k] // Amount remaining
+        for ; k < len(cur); {
             cur[k] -= 1
             rem += l[k]
             switch {
@@ -255,21 +273,21 @@ func WeightedIntegerVectorsGeneral(n int, l []int, max_weight int) <-chan []int 
                 case cur[k] < 0 || rem < 0: {
                     rem += cur[k] * l[k]
                     cur[k] = 0
-                    k --
+                    k ++
                 }
-                case len(l) == k + 2: {
-                    if rem % l[k + 1] == 0 {
-                        ratio := rem / l[k + 1]
+                case k == 1: {
+                    if rem % l[0] == 0 {
+                        ratio := rem / l[0]
                         _, ratio_leq_max_weight := min_if_b_not_zero_else_a(ratio, max_weight)
                         if ratio_leq_max_weight {
-                            cur[k + 1] = ratio
+                            cur[0] = ratio
                             yield(cur)
-                            cur[k + 1] = 0
+                            cur[0] = 0
                         }
                     }
                 }
                 default: {
-                    k ++
+                    k --
                     cur[k], _ = min_if_b_not_zero_else_a(rem / l[k], max_weight)
                     cur[k] ++ 
                     rem -= cur[k] * l[k]
@@ -296,20 +314,7 @@ func RestrictedPartitions(n int, l []int) <- chan []int {
             restricted_partitions(10, [6,4,4,4,2,2,2,2,2,2])
             [[6, 4], [6, 2, 2], [4, 4, 2], [4, 2, 2, 2], [2, 2, 2, 2, 2]]
     */
-    yield := make(chan []int)
-    go func() {
-        defer close(yield)
-        for weights := range WeightedIntegerVectorsGeneral(n, l, 1) {
-            result := make([]int, 0, len(l))
-            for idx, i := range weights {
-                if i == 1 {
-                    result = append(result, l[idx])
-                }
-            }
-            yield <- result
-        }
-    }()
-    return yield
+    return WeightedIntegerVectorsGeneral(n, l, 1)
 }
 
 

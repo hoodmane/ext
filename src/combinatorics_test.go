@@ -119,19 +119,17 @@ func TestXiDegrees(t *testing.T) {
 	tables := []struct {
 		n int
         p int
-        reverse bool
 		output []int
 	}{
-        {17,   2, true,  []int{15, 7, 3, 1}},
-        {17,   2, false, []int{1, 3, 7, 15}},
-        {17,   3, true,  []int{13, 4, 1}},
-        {400, 17, true,  []int{307, 18, 1}},
+        {17,   2, []int{1, 3, 7, 15}},
+        {17,   3, []int{1, 4, 13}},
+        {400, 17, []int{1, 18, 307}},
     }
     
     for _, table := range tables {
-        output := XiDegrees(table.n, table.p, table.reverse)
+        output := XiDegrees(table.n, table.p)
         if !eqListsQ(output, table.output) {
-            t.Errorf("Ran XiDegrees(%v, %v, %v) expected %v, got %v", table.n, table.p, table.reverse, table.output, output)
+            t.Errorf("Ran XiDegrees(%v, %v) expected %v, got %v", table.n, table.p, table.output, output)
         }
     }   
     
@@ -143,9 +141,9 @@ func TestWeightedIntegerVectors(t *testing.T) {
         l []int
         output [][]int
     }{
-        {10, []int{1, 4}, [][]int{[]int{10, 0}, []int{6, 1}, []int{2, 2}}},
-        {7, []int {1, 3, 7}, [][]int{[]int{7, 0, 0}, []int{4, 1, 0}, []int{1, 2, 0}, []int{0, 0, 1}}},
-        {20, []int{1, 4, 13}, [][]int{[]int{20, 0, 0}, []int{16, 1, 0}, []int{12, 2, 0}, []int{8, 3, 0}, []int{7, 0, 1}, []int{4, 4, 0}, []int{3, 1, 1}, []int{0, 5, 0}}},
+        {10, []int{4, 1}, [][]int{[]int{0, 10}, []int{1, 6}, []int{2, 2}}},
+        {7, []int {7, 3, 1}, [][]int{[]int{0, 0, 7}, []int{0, 1, 4}, []int{0, 2, 1}, []int{1, 0, 0}}},
+        {20, []int{13, 4, 1}, [][]int{[]int{0, 0, 20}, []int{0, 1, 16}, []int{0, 2, 12}, []int{0, 3, 8}, []int{1, 0, 7}, []int{0, 4, 4}, []int{1, 1, 3}, []int{0, 5, 0}}},
     } 
      
     for _, table := range tables {
@@ -163,8 +161,8 @@ func TestRestrictedPartitions(t *testing.T) {
         output [][]int
     }{
         {8,  []int{1},      [][]int{}},
-        {10, []int{6,4,2},  [][]int{[]int{6,4}}},
-        {10, []int{6,4,2,2},[][]int{[]int{6,4}, []int{6, 2, 2}}},
+        {10, []int{2,4,6},  [][]int{[]int{0, 1, 1}}},
+        {10, []int{2,2,4,6},[][]int{[]int{0, 0, 1, 1}, []int{1, 1, 0, 1}}},
     }
     for _, table := range tables {
         call_str := fmt.Sprintf("RestrictedPartitions(%v, %v)", table.n, table.l)

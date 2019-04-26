@@ -5,6 +5,18 @@ import (
     "testing"
 )
 
+func eqMatrixQ(a, b[][]int) bool {
+    if len(a) != len(b){
+        return false
+    }
+    for i := 0; i < len(a); i++ {
+        if !eqListsQ(a[i], b[i]){
+            return false
+        }
+    }
+    return true
+}
+
 
 func eqListsQ(a, b []int) bool {
     // If one is nil, the other must also be nil.

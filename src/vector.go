@@ -79,6 +79,12 @@ func (v Vector) Set2(even_part []int, c int){
     v.basis_vector_map[key] = m
 }
 
+func (v Vector) AddBasisVector(m Monomial, c int){
+    key := m.ToString()
+    v.coeff_map[key] += c
+    v.coeff_map[key] = ModPositive(v.coeff_map[key], v.p)
+    v.basis_vector_map[key] = m
+}
 
 func (v Vector) ScaleAndAdd(w VectorSubtype, c int) {
     v_coeff_map := v.GetCoeffMap()

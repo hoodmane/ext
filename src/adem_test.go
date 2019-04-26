@@ -5,8 +5,7 @@ import (
     "fmt"
 )
 
-
-func TestAdem2(t *testing.T){
+func TestAdemRelation2(t *testing.T){
     type strToInt map[string]int
     tables := []struct {
 		i int
@@ -32,20 +31,20 @@ func TestAdem2(t *testing.T){
     }    
     
     for _, table := range tables {
-        call_str := fmt.Sprintf("Adem2(%v, %v)", table.i, table.j)
-        output := Adem2(table.i, table.j).GetCoeffMap()
+        call_str := fmt.Sprintf("AdemRelation2(%v, %v)", table.i, table.j)
+        output := AdemRelation2(table.i, table.j).GetCoeffMap()
         checkEqStrToIntMaps(t, call_str, table.output, output)
     }
     
     for _, table := range length_tables {
-        call_str := fmt.Sprintf("Adem2(%v, %v)", table.i, table.j)
-        output_length := len(Adem2(table.i, table.j).GetCoeffMap())
+        call_str := fmt.Sprintf("AdemRelation2(%v, %v)", table.i, table.j)
+        output_length := len(AdemRelation2(table.i, table.j).GetCoeffMap())
         checkEqLengths(t, call_str, table.output_length, output_length)
     }
 }
 
 
-func TestAdemGeneric(t *testing.T){
+func TestAdemRelationGeneric(t *testing.T){
     type strToInt map[string]int
     tables := []struct {
         p int
@@ -83,14 +82,14 @@ func TestAdemGeneric(t *testing.T){
     }
     
     for _, table := range tables {
-        call_str := fmt.Sprintf("AdemGeneric(%v, %v, %v, %v)", table.p, table.i, table.epsilon, table.j)
-        output := AdemGeneric(table.p, table.i, table.epsilon, table.j).GetCoeffMap()
+        call_str := fmt.Sprintf("AdemRelationGeneric(%v, %v, %v, %v)", table.p, table.i, table.epsilon, table.j)
+        output := AdemRelationGeneric(table.p, table.i, table.epsilon, table.j).GetCoeffMap()
         checkEqStrToIntMaps(t, call_str, table.output, output)
     }    
 
     for _, table := range length_tables {
-        call_str := fmt.Sprintf("AdemGeneric(%v, %v, %v, %v)", table.p, table.i, table.epsilon, table.j)
-        output_length := len(AdemGeneric(table.p, table.i, table.epsilon, table.j).GetCoeffMap())
+        call_str := fmt.Sprintf("AdemRelationGeneric(%v, %v, %v, %v)", table.p, table.i, table.epsilon, table.j)
+        output_length := len(AdemRelationGeneric(table.p, table.i, table.epsilon, table.j).GetCoeffMap())
         checkEqLengths(t, call_str, table.output_length, output_length)
     }    
 }
@@ -168,7 +167,7 @@ func TestMakeMonoAdmissibleGeneric(t *testing.T){
 
 
 
-func TestProduct2(t *testing.T){
+func TestAdemProduct2(t *testing.T){
     type strToInt map[string]int
     tables := []struct {
 		l []int
@@ -188,19 +187,19 @@ func TestProduct2(t *testing.T){
 
     
     for _, table := range tables {
-        call_str := fmt.Sprintf("Product2(%v, %v)", table.l, table.k)
-        output := Product2(table.l, table.k).GetCoeffMap()
+        call_str := fmt.Sprintf("AdemProduct2(%v, %v)", table.l, table.k)
+        output := AdemProduct2(table.l, table.k).GetCoeffMap()
         checkEqStrToIntMaps(t, call_str, table.output, output)
     }
 
     for _, table := range length_tables {
-        call_str := fmt.Sprintf("Product2(%v, %v)", table.l, table.k)
-        output_length := len(Product2(table.l, table.k).GetCoeffMap())
+        call_str := fmt.Sprintf("AdemProduct2(%v, %v)", table.l, table.k)
+        output_length := len(AdemProduct2(table.l, table.k).GetCoeffMap())
         checkEqLengths(t, call_str, table.output_length, output_length)
     }
 }
 
-func TestProductGeneric(t *testing.T){
+func TestAdemProductGeneric(t *testing.T){
     type strToInt map[string]int
     tables := []struct {
         p int
@@ -222,20 +221,20 @@ func TestProductGeneric(t *testing.T){
 
     
     for _, table := range tables {
-        call_str := fmt.Sprintf("ProductGeneric(%v, %v, %v)", table.p, table.l, table.k)
-        output := ProductGeneric(table.p, table.l, table.k).GetCoeffMap()
+        call_str := fmt.Sprintf("AdemProductGeneric(%v, %v, %v)", table.p, table.l, table.k)
+        output := AdemProductGeneric(table.p, table.l, table.k).GetCoeffMap()
         checkEqStrToIntMaps(t, call_str, table.output, output)
     }
 
     for _, table := range length_tables {
-        call_str := fmt.Sprintf("ProductGeneric(%v, %v, %v)", table.p, table.l, table.k)
-        output_length := len(ProductGeneric(table.p, table.l, table.k).GetCoeffMap())
+        call_str := fmt.Sprintf("AdemProductGeneric(%v, %v, %v)", table.p, table.l, table.k)
+        output_length := len(AdemProductGeneric(table.p, table.l, table.k).GetCoeffMap())
         checkEqLengths(t, call_str, table.output_length, output_length)
     }
 }
 
 
-func TestBasis2(t *testing.T){
+func TestAdemBasis2(t *testing.T){
     type strToInt map[string]int
     tables := []struct {
 		n int
@@ -255,27 +254,29 @@ func TestBasis2(t *testing.T){
     }{
         {50, 145},
         {100, 1189},
-        {150, 5020},
+        //{150, 5020},
         //{200, 15499},
+        //{300, 87977},
+        //{400, 335566},
         //{500, 1010134},
     }
 
     
     for _, table := range tables {
-        call_str := fmt.Sprintf("Basis2(%v)", table.n)
-        output := Basis2(table.n)
+        call_str := fmt.Sprintf("AdemBasis2(%v)", table.n)
+        output := AdemBasis2(table.n)
         checkGeneratorOfListsOutput(t, call_str, table.output, output)
     }
 
     for _, table := range length_tables {
-        call_str := fmt.Sprintf("Basis2(%v)", table.n)
-        output := Basis2(table.n)
+        call_str := fmt.Sprintf("AdemBasis2(%v)", table.n)
+        output := AdemBasis2(table.n)
         checkGeneratorOfListsLength(t, call_str, table.output_length, output)
     }
 }
     
 
-func TestBasisGeneric(t *testing.T){
+func TestAdemBasisGeneric(t *testing.T){
     Mono := func(od, ev []int) Monomial{
         return Monomial{od, ev}
     }
@@ -300,21 +301,21 @@ func TestBasisGeneric(t *testing.T){
 	}{    
         {3, 400, 395},
         {3, 800, 3905},
-        {5, 4000, 1200},
-        {23, 88000, 198},
+        //{5, 4000, 1200},
+        //{23, 88000, 198},
         //{23, 176000, 692},
     }
     
     
     for _, table := range tables {
-        call_str := fmt.Sprintf("BasisGeneric(%v, %v)", table.p, table.n)
-        output := BasisGeneric(table.p, table.n)
+        call_str := fmt.Sprintf("AdemBasisGeneric(%v, %v)", table.p, table.n)
+        output := AdemBasisGeneric(table.p, table.n)
         checkGeneratorOfMonomialsOutput(t, call_str, table.output, output)
     }
 
     for _, table := range length_tables {
-        call_str := fmt.Sprintf("BasisGeneric(%v, %v)", table.p, table.n)
-        output := BasisGeneric(table.p, table.n)
+        call_str := fmt.Sprintf("AdemBasisGeneric(%v, %v)", table.p, table.n)
+        output := AdemBasisGeneric(table.p, table.n)
         checkGeneratorOfMonomialsLength(t, call_str, table.output_length, output)
     }
 }

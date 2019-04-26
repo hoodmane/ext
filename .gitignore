@@ -1,0 +1,9 @@
+*.out
+*.pdf
+*.test
+src/adem
+src/combinatorics
+src/milnor
+src/vector
+src/src
+
