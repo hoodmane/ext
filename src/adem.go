@@ -12,62 +12,16 @@
 package main
 
 import (
-//     "fmt"
+     "fmt"
 //     "github.com/pkg/profile"
 //     "sync"
 )
+func main(){
+    for x := range AdemBasisGeneric(3, 5) {
+        fmt.Println("out:", x)
+    }
+}
 
-// func main(){
-// //    a := AdemRelation2(2, 3)
-// //    fmt.Println("a", a.GetCoeffMap())
-// //    
-// //    b := AdemRelationGeneric(3, 2, 1, 4)
-// //    fmt.Println("b", b.GetCoeffMap())
-// //    c := MakeMonoAdmissible2([]int{24,12,4,6,1})
-// //    fmt.Println("c", c.GetCoeffMap())
-// //    
-// //    d := MakeMonoAdmissibleGeneric(3, Monomial{[]int{0,1,0},[]int{1,1}})
-// //    fmt.Println("d", d.GetCoeffMap())
-// //    
-// //    e := Product2([]int{2,1}, []int {2, 1})
-// //    fmt.Println("e", e.GetCoeffMap())// 
-//     
-// //      defer profile.Start().Stop()
-//       
-//       fmt.Println("basis 3,4")
-//       for x := range AdemBasisGeneric(3, 4) {
-//         fmt.Println(x)
-//       }
-//       fmt.Println("basis 3,5")
-//       for x := range AdemBasisGeneric(3, 5) {
-//         fmt.Println(x)
-//       }
-//       
-//       //AdemBasisGeneric(3, 300)  
-// //     var wg sync.WaitGroup
-// //     ab2_250 := AdemBasis2(130)
-// //     ab3_1000 := AdemBasisGeneric(3, 300)
-// //     x := 0
-// //     wg.Add(2)
-// //     go func(){
-// //         defer wg.Done()
-// //         for range ab2_250 {
-// //             x++
-// //         }
-// //         fmt.Println("AdemBasis2(250): ", x)
-// //     }()
-// 
-//     
-// //     go func(){
-// //         defer wg.Done()
-// //         x = 0
-// //         for range ab3_1000 {
-// //             x++
-// //         }
-// //         fmt.Println("AdemBasisGeneric(3, 250): ", x)
-// //     }()
-// //     wg.Wait()
-// }
 
 type AdemAlgebra struct {
     p int
@@ -91,7 +45,7 @@ func NewAdemBasisVector2(even_part []int) AdemElement{
     return AdemElement{NewBasisVector2(even_part), false}
 }
 
-func NewAdemBasisVectorGeneric(p int, odd_part, even_part []int) AdemElement{
+func NewAdemBasisVectorGeneric(p int, odd_part uint64, even_part []int) AdemElement{
     return AdemElement{NewBasisVector(p, odd_part, even_part), true}
 }
 
@@ -123,13 +77,13 @@ func AdemRelation2(a, b int) AdemElement {
 //Return the generic adem relation for P(A)*P(B) or P(A) * beta * P(B)
 func AdemRelationGeneric(p, A, bockstein, B int)  AdemElement {
     if A == 0 {
-        return NewAdemBasisVectorGeneric(p, []int{bockstein, 0}, []int{B} )
+        return NewAdemBasisVectorGeneric(p, uint64(bockstein), []int{B} )
     }
     if B == 0 {
-        return NewAdemBasisVectorGeneric(p, []int{0, bockstein}, []int{A} )
+        return NewAdemBasisVectorGeneric(p, uint64(bockstein) << 1, []int{A} )
     }
     if A >= p*B + bockstein { // Admissible
-        return NewAdemBasisVectorGeneric(p, []int{0, bockstein, 0}, []int{A, B} )
+        return NewAdemBasisVectorGeneric(p, uint64(bockstein) << 1, []int{A, B} )
     }
     
     result := NewAdemZeroVectorGeneric(p, A/p * (1 + bockstein))
@@ -138,9 +92,9 @@ func AdemRelationGeneric(p, A, bockstein, B int)  AdemElement {
         coeff *= MinusOneToTheN(A + j)
         coeff = coeff % p        
         if coeff != 0 && j == 0 {
-            result.Set([]int{bockstein, 0}, []int{A + B}, coeff)
+            result.Set(uint64(bockstein), []int{A + B}, coeff)
         } else if coeff != 0 && j != 0 {
-            result.Set([]int{bockstein, 0, 0}, []int{A + B - j, j}, coeff)
+            result.Set(uint64(bockstein), []int{A + B - j, j}, coeff)
         }
     }
     if bockstein == 1 {
@@ -148,9 +102,9 @@ func AdemRelationGeneric(p, A, bockstein, B int)  AdemElement {
             coeff := BinomialOdd((B - j)*(p - 1) - 1, A - p*j - 1, p)
             coeff *= MinusOneToTheN(A + j - 1)
             if coeff != 0 && j == 0 {
-                result.Set([]int{0, 1}, []int{A + B}, coeff)
+                result.Set(uint64(bockstein) << 1, []int{A + B}, coeff)
             } else if coeff != 0 && j != 0 {
-                result.Set([]int{0, 1, 0}, []int{A + B - j, j}, coeff)
+                result.Set(uint64(bockstein) << 1, []int{A + B - j, j}, coeff)
             }
         }
     }
@@ -195,7 +149,7 @@ func MakeMonoAdmissibleGeneric(p int, mono Monomial) AdemElement {
     even_part := mono.even_part
     first_inadmissible_index := -1
     for j := 0; j < len(even_part) - 1; j++ {
-        if even_part[j] < odd_part[j+1] + p * even_part[j+1] {
+        if even_part[j] < int((odd_part >> uint(j+1)) & 1) + p * even_part[j+1] {
             first_inadmissible_index = j
             break
         }
@@ -204,30 +158,27 @@ func MakeMonoAdmissibleGeneric(p int, mono Monomial) AdemElement {
         return NewAdemBasisVectorGeneric(p, odd_part, even_part)
     }
     result := NewAdemZeroVectorGeneric(p, -1)
-    j := first_inadmissible_index
-    y := AdemRelationGeneric(p, even_part[j],odd_part[j+1], even_part[j+1])
+    j := uint(first_inadmissible_index)
+    y := AdemRelationGeneric(p, even_part[j],int((odd_part>>(j+1))&1), even_part[j+1])
     coeff_map := y.GetCoeffMap()
     for key, m := range y.GetBasisVectorMap() {
         coeff := coeff_map[key]
         reln_even_part := m.even_part
         reln_odd_part := m.odd_part
         
-        if odd_part[j]   == 1 && reln_odd_part[0] == 1  || 
-           odd_part[j+2] == 1 && reln_odd_part[len(reln_odd_part) - 1] == 1 {
+        if (odd_part>>j)&1     == 1 && reln_odd_part & 1 == 1  || 
+           (odd_part>>(j+2))&1 == 1 && (reln_odd_part >> uint(len(reln_even_part))) & 1 == 1 {
             continue
         }
         
         new_even_part := make([]int, len(even_part) + len(reln_even_part) - 2)
-        new_odd_part  := make([]int, len(odd_part) + len(reln_odd_part) - 3)
         copy(new_even_part, even_part[:j])
         copy(new_even_part[j:], reln_even_part)
-        copy(new_even_part[j+len(reln_even_part):], even_part[j+2:])
+        copy(new_even_part[j+uint(len(reln_even_part)):], even_part[j+2:])
         
-        copy(new_odd_part, odd_part[:j+1])
-        new_odd_part[j] += reln_odd_part[0]
-        copy(new_odd_part[j+1:], reln_odd_part[1:])
-        new_odd_part[j + len(reln_odd_part) - 1] += odd_part[j + 2]
-        copy(new_odd_part[j + len(reln_odd_part):], odd_part[j + 3:])    
+        new_odd_part := odd_part & ( (1 << j+1) - 1)
+        new_odd_part += reln_odd_part << j
+        new_odd_part += (odd_part & ^( (1 << j+3) - 1)) >> uint(len(reln_even_part)) - 1
         
         new := MakeMonoAdmissibleGeneric(p, Monomial{new_odd_part, new_even_part})
         result.ScaleAndAdd(new, coeff) 
@@ -246,13 +197,11 @@ func AdemProduct2(m1, m2 []int) AdemElement {
 
 //Multiply monomials m1 and m2 and write the result in the Adem basis in the generic case.
 func AdemProductGeneric(p int, m1, m2 Monomial) AdemElement {
-    if m1.odd_part[len(m1.odd_part) - 1] == 1 && m2.odd_part[0] == 1 {
+    if (m1.odd_part >> uint(len(m1.even_part))) & 1 == 1 && m2.odd_part & 1 == 1 {
         return NewAdemZeroVectorGeneric(p, 0)
     }
-    odd_part := make([]int, len(m1.odd_part) + len(m2.odd_part) - 1)
-    copy(odd_part, m1.odd_part)
-    odd_part[len(m1.odd_part) - 1] += m2.odd_part[0]
-    copy(odd_part[len(m1.odd_part):], m2.odd_part[1:])
+    odd_part := m1.odd_part
+    odd_part += m2.odd_part << uint(len(m1.even_part))
     
     even_part := make([]int, len(m1.even_part) + len(m2.even_part))
     copy(even_part, m1.even_part)
@@ -324,16 +273,14 @@ func ademBasisGenericHelper(p, n, bound, extra_length int) <-chan Monomial {
     go func() {
         defer close(ch)      
         if n == 0 {
-            odd_result  := make([]int, 1, 1 + extra_length)
+            odd_result  := uint64(0)
             even_result := make([]int, 0, extra_length)
-            odd_result[0] = 0
             ch <- Monomial{odd_result, even_result}
             return
         }
         if n == 1 {
-            odd_result  := make([]int, 1, 1 + extra_length)
+            odd_result  := uint64(1)
             even_result := make([]int, 0, extra_length)
-            odd_result[0] = 1
             ch <- Monomial{odd_result, even_result}
             return
         }
@@ -362,11 +309,8 @@ func ademBasisGenericHelperLast(p int, ch chan<- Monomial, n, epsilon, last, ext
             odd_part := mono.odd_part
             even_part := mono.even_part
             if extra_length > 0 {
-                output_odd_part  := make([]int, len(odd_part),  len(odd_part)  + extra_length)
                 output_even_part := make([]int, len(even_part), len(even_part) + extra_length)
-                copy(output_odd_part, odd_part)
                 copy(output_even_part, even_part)
-                odd_part = output_odd_part
                 even_part = output_even_part
             }
             ch <- Monomial{odd_part, even_part}
@@ -377,7 +321,7 @@ func ademBasisGenericHelperLast(p int, ch chan<- Monomial, n, epsilon, last, ext
     for vec := range ademBasisGenericHelper(p, n - 2*(p -1)*last - epsilon, p * last, extra_length + 1) {
         odd_part := vec.odd_part
         even_part := vec.even_part
-        odd_part = append(odd_part, epsilon)
+        odd_part += uint64(epsilon) << uint(len(vec.even_part)+1)
         even_part = append(even_part, last)
         mono := Monomial{odd_part, even_part}
         elt_list  = append(elt_list, mono)
@@ -394,3 +338,4 @@ func AdemBasisGeneric(p, n int) <- chan Monomial {
     }
     return ademBasisGenericHelper(p, n, 1, 0)
 }
+

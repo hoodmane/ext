@@ -16,23 +16,30 @@ package main
 
 import (
     "math"
-    "fmt"
+//    "fmt"
 )
 
-func main(){
-    empty_profile := ProfileList{[]int{},false,false}
-    empty_full_profile := FullProfile{empty_profile, empty_profile}
-    Alg := func(p int) MilnorAlgebra {
-        return MinimalMilnorAlgebra{p,p!=2,empty_full_profile}
-    }
-    for x := range MilnorBasisGeneric(Alg(3),1){
-        fmt.Println(x)
-    }
-}
+//func main(){
+//    empty_profile := ProfileList{[]int{},false,false}
+//    empty_full_profile := FullProfile{empty_profile, empty_profile}
+//    Alg := func(p int) MilnorAlgebra {
+//        return MinimalMilnorAlgebra{p,p!=2,empty_full_profile}
+//    }
+//    
+//    for x := range MilnorBasisGenericQpart(3,(uint64(1) << uint(10))-1, 22){
+//        fmt.Println("out:", x)
+//    }
+//
+//    fmt.Println("")
+//    fmt.Println("A(3).basis(1)")    
+//    for x := range MilnorBasisGeneric(Alg(3), 9){
+//        fmt.Println(x)
+//    }
+//}
 
 type FullProfile struct {
-    oddPart Profile
-    evenPart Profile
+    odd_part Profile
+    even_part Profile
 }
 
 type Profile interface {
@@ -129,7 +136,7 @@ func NewMilnorBasisVector2(even_part []int) MilnorElement{
     return MilnorElement{NewBasisVector2(even_part), false}
 }
 
-func NewMilnorBasisVectorGeneric(p int, odd_part, even_part []int) MilnorElement{
+func NewMilnorBasisVectorGeneric(p int, odd_part uint64, even_part []int) MilnorElement{
     return MilnorElement{NewBasisVector(p, odd_part, even_part), true}
 }
 
@@ -282,7 +289,7 @@ func MilnorProductEven(p int, r, s []int) MilnorElement {
         }
         if coeff != 0 {
             diagonal_sums = remove_trailing_zeroes(diagonal_sums)
-            m := Monomial{[]int{}, diagonal_sums}
+            m := Monomial{0, diagonal_sums}
             result.AddBasisVector(m, coeff)
         }
     }
@@ -301,9 +308,12 @@ func inListQ(l []int, n int) bool{
 
 // Reduce m1 * f = (Q_e0 Q_e1 ... P(r1, r2, ...)) * (Q_f0 Q_f1 ...) into the form Sum of Q's * P's
 // Result is represented as dictionary of pairs of tuples.
-func MilnorProductFullQpart(p int, m1 Monomial, f []int) MilnorElement{
+func MilnorProductFullQpart(p int, m1 Monomial, f uint64) MilnorElement{
     result := NewMilnorBasisVectorGeneric(p, m1.odd_part, m1.even_part)
-    for _, k := range f {
+    for k := 0; f & ^((1 << uint(k)) - 1) != 0; k++ {
+        if f & (1 << uint(k)) == 0 {
+            continue
+        }
         old_result := result
         result = NewMilnorZeroVectorGeneric(p, -1)
         p_to_the_k := pow(p, k)
@@ -311,7 +321,7 @@ func MilnorProductFullQpart(p int, m1 Monomial, f []int) MilnorElement{
             for i := 0; i < len(mono.even_part) + 1; i++ {
                 q_mono := mono.odd_part
                 p_mono := mono.even_part
-                if inListQ(mono.odd_part, k+i){
+                if q_mono & (1 << uint(k+i)) != 0 {
                     continue
                 }
                 // Make sure p_mono[i - 1] is large enough to deduct p^k from it
@@ -326,21 +336,17 @@ func MilnorProductFullQpart(p int, m1 Monomial, f []int) MilnorElement{
                     p_mono = remove_trailing_zeroes(new_p_mono)                
                 }
                 
-                ind := 0
-                for _, x := range q_mono {
-                    if x >= k+i {
-                        ind ++
+                // insert(q_mono, len(q_mono) - qs_gt_k_plus_i, k+i)
+                q_mono += 1 << uint(k+i)
+                
+                larger_Qs := 0
+                
+                for idx := k + i + 1; idx < 63; idx ++ {
+                    if q_mono & (1 << uint(idx)) != 0 {
+                        larger_Qs ++
                     }
                 }
-                
-                // insert(q_mono, len(q_mono) - ind, k+i)
-                new_q_mono := make([]int, len(q_mono) + 1)
-                copy(new_q_mono, q_mono[:len(q_mono) - ind])
-                new_q_mono[len(q_mono) - ind] = k + i
-                copy(new_q_mono[len(q_mono) - ind + 1:], q_mono[len(q_mono) - ind:])
-                q_mono = new_q_mono
-                
-                coeff := MinusOneToTheN(ind) * old_result.GetCoeffMap()[key]
+                coeff := MinusOneToTheN(larger_Qs) * old_result.GetCoeffMap()[key]
                 
                 result.AddBasisVector(Monomial{q_mono, p_mono}, coeff)
             }
@@ -415,75 +421,89 @@ func MilnorProduct(algebra MilnorAlgebra, r, s Monomial) MilnorElement {
     }
 }
 
-func CheckOddProfile(profile Profile, q_mono []int) bool {       
-    if !profile.restrictedQ() {
-        return true
-    }
-    for _, i := range q_mono {
-        if profile.getIndex(i) <= 1 {
-            return false
-        }
-    }
-    return true
-}
-
-func CheckEvenProfile(p int, profile Profile, exponents []int) bool {
-    if !profile.restrictedQ() {
-        return true
-    }
-    for i, exp := range exponents{
-        if exp >= profile.getExponent(p, i) {
-            return false
-        }
-    }
-    return true
-}
-
-
-// Return the even part of the basis in degree n * 2*(p-1).
-// In the nongeneric case, this actually just gets the whole degree n basis.
-// Note the factor of two difference between 2*(2-1) and 1.
-func MilnorBasisEven(algebra MilnorAlgebra, n int) <-chan []int {
+func MilnorBasisEven(p int, xi_degrees []int, profile_list []int, n int) <-chan []int {
     ch := make(chan []int, 20)
-    profile := algebra.getProfile().evenPart
-    p := algebra.getPrime()
     go func(){
         defer close(ch)
         if n == 0 {
             ch <- []int{}
             return
-        }        
-        for exponents := range WeightedIntegerVectors(n, XiDegrees(n, p)) {
+        }   
+        
+        for exponents := range WeightedIntegerVectors(n, xi_degrees, profile_list) {
             exponents = remove_trailing_zeroes(exponents)
-            if CheckEvenProfile(p, profile, exponents) {
-                ch <- exponents
-            }
+            ch <- exponents
         }
     }()
     return ch
+}
+
+type Q_part struct {
+    bit_string uint64
+    degree int
+}
+
+var milnor_basis_Q_table = make(map[int] [][]Q_part)
+var milnor_basis_Q_table_size = make(map[int] int)
+
+func generateMilnorBasisQpartTable(p int, n int){
+    q := 2*(p-1)
+    tau_degrees := TauDegrees(n, p)
+    table, ok := milnor_basis_Q_table[p]
+    prev_dim := milnor_basis_Q_table_size[p]
+    bit_string_min := uint64(1) << uint(prev_dim)    
+    if !ok {
+        milnor_basis_Q_table[p] = make([][]Q_part, q) 
+        table = milnor_basis_Q_table[p]
+        for residue := 0; residue < q; residue ++ {
+            table[residue] = make([]Q_part, 0, 10)
+        }  
+        table[0] = append(table[0], Q_part{0, 0})
+    }
+    milnor_basis_Q_table_size[p] = len(tau_degrees)    
+    bit_string_max := uint64(1) 
+    bit_string_max <<= uint(len(tau_degrees))
+    total := 0
+    //The total starts out as tau_degrees[prev_dim] but we update by tau_degrees[prev_dim] - Sum(smaller tau_i's).
+    //So initialize total = Sum(smaller tau_i's)
+    for i := 0; i < prev_dim; i++ {
+        total += tau_degrees[i]
+    }
+    //The residue starts out as 1, but we update by 1 - # of trailing 0's.     
+    //On the first pass, # of trailing 0's is prev_dim, so initialize residue = prev_dim 
+    residue := prev_dim 
+    for bit_string := bit_string_min;  bit_string < bit_string_max; bit_string++ {
+         // Iterate over trailing zero bits
+         v := (bit_string ^ (bit_string - 1)) >> 1
+         c := 0
+         for ; v !=0 ; c++ {
+             v >>= 1;
+             total -= tau_degrees[c]
+         }
+         total += tau_degrees[c]
+         residue = ModPositive(residue + 1 - c, q)        
+         table[residue] = append(table[residue], Q_part{bit_string, total})
+     }
 }
 
 // Returns the "Q-part" of the basis in degree q_deg.
 // This means return the set of monomials Q(i_1) * ... * Q(i_k) where i_1 < ... < i_k
 // and the product is in q_deg. Basically it's just an issue of finding partitions of
 // q_deg into parts of size |Q(i_j)|, and then there's a profile condition.
-func MilnorBasisGenericQpart(algebra MilnorAlgebra, q_deg int) <-chan []int {
-    ch := make(chan []int, 20)
-    profile := algebra.getProfile().oddPart
-    p := algebra.getPrime()
+func MilnorBasisGenericQpart(p int, profile uint64, n int) <-chan Q_part {
+    ch := make(chan Q_part, 20)
     go func(){
         defer close(ch)
-        q_degrees := TauDegrees(q_deg, p)
-        for sigma := range RestrictedPartitions(q_deg, q_degrees) {
-            // q_mono is the list of indices ocurring in the partition
-            q_mono := make([]int, 0, len(q_degrees))
-            for idx := 0; idx < len(q_degrees); idx++ {
-                if sigma[idx] == 1 {
-                    q_mono = append(q_mono, idx)
-                }
+        if NumTausLeqN(n, p) > milnor_basis_Q_table_size[p] {
+            generateMilnorBasisQpartTable(p, n)
+        }
+        tau_monomial_list := milnor_basis_Q_table[p][n % (2*p - 2)]
+        for _, tau_mono := range tau_monomial_list {
+            if tau_mono.degree > n {
+                return
             }
-            if CheckOddProfile(profile, q_mono) {
-                ch <- q_mono
+            if tau_mono.bit_string & (^profile) == 0 {
+               ch <- tau_mono
             }
         }
     }()
@@ -491,38 +511,54 @@ func MilnorBasisGenericQpart(algebra MilnorAlgebra, q_deg int) <-chan []int {
 }
 
 
+// Return the even part of the basis in degree n * 2*(p-1).
+// In the nongeneric case, this actually just gets the whole degree n basis.
+// Note the factor of two difference between 2*(2-1) and 1.
+func MilnorBasis2(algebra MilnorAlgebra, n int) <-chan []int {
+    profile := algebra.getProfile().even_part
+    p := algebra.getPrime()
+    xi_degrees := XiDegrees(n, p)
+    profile_list := make([]int, len(xi_degrees))
+    for idx := range xi_degrees {
+        profile_list[idx] = profile.getExponent(p, idx) - 1
+    }
+    return MilnorBasisEven(p, xi_degrees, profile_list, n)
+}
+
 // Get the basis in degree n for the generic steenrod algebra at the prime p.
 // We just put together the "even part" of the basis and the "Q part".
 func MilnorBasisGeneric(algebra MilnorAlgebra, n int) <-chan Monomial{
     ch := make(chan Monomial, 20)
     p := algebra.getPrime()
-    q := 2*(p - 1)
+    xi_degrees := XiDegrees(n, p)
+    num_taus := NumTausLeqN(n, p)
+    full_profile := algebra.getProfile()
+    odd_profile := uint64(0)
+    for idx := 0; idx < num_taus; idx ++ {
+        if full_profile.odd_part.getIndex(idx) > 0 {
+            odd_profile += 1 << uint(idx)
+        }
+    }    
+    even_profile_list := make([]int, len(xi_degrees))
+    for idx := range xi_degrees {
+        even_profile_list[idx] = full_profile.even_part.getExponent(p, idx) - 1
+    }    
     go func(){
         defer close(ch)
         if n == 0 {
-            ch <- Monomial{[]int {}, []int {}}
+            ch <- Monomial{0, []int {}}
             return
         }
         // p_deg records the desired degree of the P part of the basis element.
         // Since p-parts are always divisible by 2p-2, we divide by this first.
         // pow(p, -1) returns 1, so min_q_deg is 0 if q divides n evenly.
-        min_q_deg := p_to_the_n_minus_1_over_p_minus_1(p, - 1 + (n % q) )
-        for p_deg := 0; p_deg <= n / q; p_deg ++ {
-            q_deg := n - p_deg * q
-    
-            // if this inequality holds, no way to have a partition
-            // with distinct parts.
-            if q_deg < min_q_deg {
-                break
-            }
-    
-            Q_parts := MilnorBasisGenericQpart(algebra, q_deg)
-            P_parts := MilnorBasisEven(algebra, p_deg)
-            for q_part := range Q_parts {
-                for p_part := range P_parts {
-                    fmt.Println("p:", p_part)
-                    ch <- Monomial{q_part, p_part}
-                }
+        for qs_q_deg := range MilnorBasisGenericQpart(p, odd_profile, n){
+            q_part := qs_q_deg.bit_string
+            q_deg := qs_q_deg.degree
+            p_deg := (n - q_deg) / (2*(p-1))
+            P_parts := MilnorBasisEven(p, xi_degrees, even_profile_list, p_deg)
+            for p_part := range P_parts {
+                ch <- Monomial{q_part, p_part}
             }
         }
     }()

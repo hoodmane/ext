@@ -18,6 +18,15 @@ func pow(a, b int) int {
     return res;
 }
 
+func logp(n, p int) int {
+    result := 0
+    for ; n > 0; {
+        n /= p
+        result += 1
+    }
+    return result
+}
+
 func p_to_the_n_minus_1_over_p_minus_1(p, n int) int {
     return (pow(p, n) - 1) / (p - 1);
 }
@@ -165,14 +174,9 @@ func XiDegrees(n, p int) []int {
     if n <= 0 {
         return []int {}
     }
-    // First determine length of output list
-    N := n*(p-1) + 1
-    xi_max := 0
-    for ; N > 0; {
-        N /= p
-        xi_max += 1
-    }
-    //Now produce it.
+    // Determine length of output list
+    xi_max := logp(n*(p-1) + 1, p)
+
     result := make([]int, xi_max - 1)
     entry := 0
     p_to_the_d := 1
@@ -184,28 +188,33 @@ func XiDegrees(n, p int) []int {
     return result
 }
 
+func NumTausLeqN(n, p int) int {
+    return logp((n + 1) / 2, p)
+}
+
 func TauDegrees(n, p int) []int {
-    xi_degs := XiDegrees((n - 1)/(2*(p-1)), p)
-    result := make([]int, len(xi_degs) + 1)
-    copy(result[1:], xi_degs)
-    for idx, d := range result {
-        result[idx] = 1 + 2*(p - 1)*d
+    // Determine length of output list
+    tau_max := NumTausLeqN(n, p)
+    result := make([]int, tau_max)
+    p_to_the_d := 1
+    for i := 0; i < tau_max; i++ {
+        result[i] = 2 * p_to_the_d - 1
+        p_to_the_d *= p    
     }
     return result
 }
 
-//Helper function for WeightedIntegerVectorsGeneral
-//If b == 0 return a, otherwise return min(a, b). Second output is the boolean first_output == a
-func min_if_b_not_zero_else_a(a, b int) (int, bool) {
-    if a <= b || b == 0 {
+func threshold_max_weight(a int, index int, max_weights []int) (int, bool) {
+    if a <= max_weights[index] {
         return a, true
+    } else {
+        return max_weights[index], false
     }
-    return b, false
 }
 
 //Compute integral weights so that the dot product l . weights == n. 
 //If max_weight is not zero, each weight is limited to be at most max_weight.
-func WeightedIntegerVectorsGeneral(n int, l []int, max_weight int) <-chan []int {
+func WeightedIntegerVectors(n int, l []int, max_weights []int) <-chan []int {
     /*
     Iterate over all ``l`` weighted integer vectors with total weight ``n``.
 
@@ -227,12 +236,8 @@ func WeightedIntegerVectorsGeneral(n int, l []int, max_weight int) <-chan []int 
         sage: type(list(iterator_fast(2, [2]))[0][0])
         <type 'sage.rings.integer.Integer'&gt
     */
+    
     ch := make(chan []int)
-    yield := func(result []int) {
-        cpy := make([]int, len(result))
-        copy(cpy, result)
-        ch <- cpy
-    }
     go func() {
         defer close(ch)
         if n < 0 {
@@ -247,28 +252,39 @@ func WeightedIntegerVectorsGeneral(n int, l []int, max_weight int) <-chan []int 
         }
         
         cur := make([]int, len(l))
-        if len(l) == 1 {
-            if n % l[0] == 0 {
-                ratio := n / l[0]
-                _, ratio_leq_max_weight := min_if_b_not_zero_else_a(ratio, max_weight)
+        rem := n
+        k := len(l) - 1 
+        for  ;  k >= 0 && l[k] > n; k-- {}
+        
+        if k == -1 {
+            if n == 0 {
+                ch <- cur 
+            }
+            return
+        }
+        if k == 0 {
+            if rem % l[0] == 0 {
+                ratio, ratio_leq_max_weight := threshold_max_weight(rem / l[0], 0, max_weights)
                 if ratio_leq_max_weight {
                     cur[0] = ratio
-                    yield(cur)
+                    ch <- cur 
                 }
             }
             return
         }
         
-        k := len(l) - 1
-        cur[k], _ = min_if_b_not_zero_else_a(n / l[k], max_weight)
+        cur[k], _ = threshold_max_weight(rem / l[k], k, max_weights)
         cur[k]++ 
-        rem := n - cur[k] * l[k] // Amount remaining
+        rem -= cur[k] * l[k]
+        
         for ; k < len(cur); {
             cur[k] -= 1
             rem += l[k]
             switch {
                 case rem == 0: {
-                    yield(cur)
+                    result := make([]int, len(cur))
+                    copy(result, cur)
+                    ch <- result
                 }
                 case cur[k] < 0 || rem < 0: {
                     rem += cur[k] * l[k]
@@ -277,18 +293,19 @@ func WeightedIntegerVectorsGeneral(n int, l []int, max_weight int) <-chan []int 
                 }
                 case k == 1: {
                     if rem % l[0] == 0 {
-                        ratio := rem / l[0]
-                        _, ratio_leq_max_weight := min_if_b_not_zero_else_a(ratio, max_weight)
+                        ratio, ratio_leq_max_weight := threshold_max_weight(rem / l[0], 0, max_weights)
                         if ratio_leq_max_weight {
                             cur[0] = ratio
-                            yield(cur)
+                            result := make([]int, len(cur))
+                            copy(result, cur)                            
+                            ch <- result
                             cur[0] = 0
                         }
                     }
                 }
                 default: {
                     k --
-                    cur[k], _ = min_if_b_not_zero_else_a(rem / l[k], max_weight)
+                    cur[k], _ = threshold_max_weight(rem / l[k], k, max_weights)
                     cur[k] ++ 
                     rem -= cur[k] * l[k]
                 }
@@ -296,25 +313,6 @@ func WeightedIntegerVectorsGeneral(n int, l []int, max_weight int) <-chan []int 
         }
     }()
     return ch
-}
-
-//The no max_weight case of WeightedIntegerVectorsGeneral
-func WeightedIntegerVectors(n int, l []int) <- chan []int {
-    return WeightedIntegerVectorsGeneral(n, l, 0)
-}
-
-//The max_weight == 1 case of WeightedIntegerVectorsGeneral. 
-//Returns the list of parts in the partition rather than the weight list.
-func RestrictedPartitions(n int, l []int) <- chan []int {
-    /*
-            restricted_partitions(10, [6,4,2])
-            [[6, 4], [6, 2, 2], [4, 4, 2], [4, 2, 2, 2], [2, 2, 2, 2, 2]]
-            restricted_partitions(10, [6,4,2,2,2])
-            [[6, 4], [6, 2, 2], [4, 4, 2], [4, 2, 2, 2], [2, 2, 2, 2, 2]]
-            restricted_partitions(10, [6,4,4,4,2,2,2,2,2,2])
-            [[6, 4], [6, 2, 2], [4, 4, 2], [4, 2, 2, 2], [2, 2, 2, 2, 2]]
-    */
-    return WeightedIntegerVectorsGeneral(n, l, 1)
 }
 
 

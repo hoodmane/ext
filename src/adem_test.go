@@ -13,12 +13,12 @@ func TestAdemRelation2(t *testing.T){
 		output strToInt
 	}{
         {1,1, strToInt{}},
-        {1,2, strToInt{"{[] [3]}" : 1}},
-        {2,2, strToInt{"{[] [3 1]}" : 1}},
-        {4,2, strToInt{"{[] [4 2]}" : 1}}, // Admissible
-        {4,4, strToInt{"{[] [6 2]}" : 1, "{[] [7 1]}" : 1}},
+        {1,2, strToInt{"{0 [3]}" : 1}},
+        {2,2, strToInt{"{0 [3 1]}" : 1}},
+        {4,2, strToInt{"{0 [4 2]}" : 1}}, // Admissible
+        {4,4, strToInt{"{0 [6 2]}" : 1, "{0 [7 1]}" : 1}},
         {5,7, strToInt{}},
-        {6,7, strToInt{"{[] [13]}" : 1, "{[] [12 1]}" : 1, "{[] [10 3]}" : 1}},
+        {6,7, strToInt{"{0 [13]}" : 1, "{0 [12 1]}" : 1, "{0 [10 3]}" : 1}},
     }
     
     length_tables := []struct {
@@ -53,21 +53,21 @@ func TestAdemRelationGeneric(t *testing.T){
         j int
 		output strToInt
 	}{
-        {3, 1,0,1, strToInt{"{[0 0] [2]}" : 2}},
-        {3, 1,1,1, strToInt{"{[1 0] [2]}" : 1, "{[0 1] [2]}" : 1}},
+        {3, 1,0,1, strToInt{"{0 [2]}" : 2}},
+        {3, 1,1,1, strToInt{"{1 [2]}" : 1, "{2 [2]}" : 1}},
         {3, 1,0,2, strToInt{}},
-        {3, 1,1,2, strToInt{"{[0 1] [3]}" : 1, "{[1 0] [3]}" : 2}},
+        {3, 1,1,2, strToInt{"{2 [3]}" : 1, "{1 [3]}" : 2}},
         {3, 2,0,1, strToInt{}},
-        {3, 3,0,1, strToInt{"{[0 0 0] [3 1]}" : 1}},
-        {3, 5,0,7, strToInt{"{[0 0 0] [11 1]}" : 1}},
-        {3, 25,1,20, strToInt{"{[1 0 0] [38 7]}" : 1, "{[0 1 0] [38 7]}" : 1, "{[0 1 0] [37 8]}" : 1}},
+        {3, 3,0,1, strToInt{"{0 [3 1]}" : 1}},
+        {3, 5,0,7, strToInt{"{0 [11 1]}" : 1}},
+        {3, 25,1,20, strToInt{"{1 [38 7]}" : 1, "{2 [38 7]}" : 1, "{2 [37 8]}" : 1}},
         
-        {5, 1, 1, 2, strToInt{"{[0 1] [3]}" : 1, "{[1 0] [3]}" : 2}},
+        {5, 1, 1, 2, strToInt{"{2 [3]}" : 1, "{1 [3]}" : 2}},
         
-        {23, 1,0,1, strToInt{"{[0 0] [2]}" : 2}},
-        {23, 1,1,1, strToInt{"{[1 0] [2]}" : 1, "{[0 1] [2]}" : 1}},   
-        {23, 2,0,1, strToInt{"{[0 0] [3]}" : 3}},
-        {23, 5,0,7, strToInt{"{[0 0] [12]}" : 10}},
+        {23, 1,0,1, strToInt{"{0 [2]}" : 2}},
+        {23, 1,1,1, strToInt{"{1 [2]}" : 1, "{2 [2]}" : 1}},   
+        {23, 2,0,1, strToInt{"{0 [3]}" : 3}},
+        {23, 5,0,7, strToInt{"{0 [12]}" : 10}},
     }
 
     length_tables := []struct {
@@ -102,11 +102,11 @@ func TestMakeMonoAdmissible2(t *testing.T){
 		l []int
 		output strToInt
 	}{
-        {[]int{}, strToInt{"{[] []}" : 1}},
-        {[]int{12}, strToInt{"{[] [12]}" : 1}},
-        {[]int{2, 1}, strToInt{"{[] [2 1]}" : 1}},
-        {[]int{2, 2}, strToInt{"{[] [3 1]}" : 1}},
-        {[]int{2, 2, 2}, strToInt{"{[] [5 1]}" : 1}},
+        {[]int{}, strToInt{"{0 []}" : 1}},
+        {[]int{12}, strToInt{"{0 [12]}" : 1}},
+        {[]int{2, 1}, strToInt{"{0 [2 1]}" : 1}},
+        {[]int{2, 2}, strToInt{"{0 [3 1]}" : 1}},
+        {[]int{2, 2, 2}, strToInt{"{0 [5 1]}" : 1}},
     }
 
     length_tables := []struct {
@@ -132,16 +132,25 @@ func TestMakeMonoAdmissible2(t *testing.T){
 
 func TestMakeMonoAdmissibleGeneric(t *testing.T){
     type strToInt map[string]int
+    int_vec_to_bit_string := func(od []int) uint64 {
+        bit_string := uint64(0)
+        for i, k := range od {
+            if k == 1 {
+                bit_string += 1 << uint(i)
+            }
+        }
+        return bit_string
+    }
     Mono := func(od, ev []int) Monomial{
-        return Monomial{od, ev}
+        return Monomial{int_vec_to_bit_string(od), ev}
     }
     tables := []struct {
         p int
 		l Monomial
 		output strToInt
 	}{
-        {3, Mono([]int {0}, []int {}), strToInt{"{[0] []}" : 1 }},
-        {7, Mono([]int {0, 0, 0}, []int {2, 1}), strToInt{"{[0 0] [3]}" : 3 }},
+        {3, Mono([]int {0}, []int {}), strToInt{"{0 []}" : 1 }},
+        //{7, Mono([]int {0, 0, 0}, []int {2, 1}), strToInt{"{0 [3]}" : 3 }},
     }
 
     length_tables := []struct {
@@ -277,8 +286,17 @@ func TestAdemBasis2(t *testing.T){
     
 
 func TestAdemBasisGeneric(t *testing.T){
+    int_vec_to_bit_string := func(od []int) uint64 {
+        bit_string := uint64(0)
+        for i, k := range od {
+            if k == 1 {
+                bit_string += 1 << uint(i)
+            }
+        }
+        return bit_string
+    }
     Mono := func(od, ev []int) Monomial{
-        return Monomial{od, ev}
+        return Monomial{int_vec_to_bit_string(od), ev}
     }
     
     tables := []struct {
@@ -319,5 +337,6 @@ func TestAdemBasisGeneric(t *testing.T){
         checkGeneratorOfMonomialsLength(t, call_str, table.output_length, output)
     }
 }
+
 
 

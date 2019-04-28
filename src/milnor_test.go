@@ -101,11 +101,11 @@ func TestMilnorProductEven(t *testing.T) {
         s []int
         output map[string]int
 	}{
-        {3, []int{1},   []int{1},   map[string]int{"{[] [2]}" : 2}},
-        {3, []int{1},   []int{0, 1},map[string]int{"{[] [1 1]}" : 1}},
-        {2, []int{0,2}, []int{1},   map[string]int{"{[] [1 2]}": 1, "{[] [0 0 1]}": 1}},
-        {3, []int{0,3}, []int{1},   map[string]int{"{[] [1 3]}": 1, "{[] [0 0 1]}": 1}},
-        {3, []int{0,9}, []int{1,1}, map[string]int{"{[] [1 10]}": 1, "{[] [0 7 1]}" : 1, "{[] [1 0 0 1]}": 1}},
+        {3, []int{1},   []int{1},   map[string]int{"{0 [2]}" : 2}},
+        {3, []int{1},   []int{0, 1},map[string]int{"{0 [1 1]}" : 1}},
+        {2, []int{0,2}, []int{1},   map[string]int{"{0 [1 2]}": 1, "{0 [0 0 1]}": 1}},
+        {3, []int{0,3}, []int{1},   map[string]int{"{0 [1 3]}": 1, "{0 [0 0 1]}": 1}},
+        {3, []int{0,9}, []int{1,1}, map[string]int{"{0 [1 10]}": 1, "{0 [0 7 1]}" : 1, "{0 [1 0 0 1]}": 1}},
     }
     
     for _, table := range tables {
@@ -116,41 +116,68 @@ func TestMilnorProductEven(t *testing.T) {
 }
 
 func TestMilnorProductFullQpart(t *testing.T) {
-    Mono := func(od, ev []int) Monomial{
-        return Monomial{od, ev}
+    int_vec_to_bit_string := func(od []int) uint64 {
+        bit_string := uint64(0)
+        for _, k := range od {
+            bit_string += 1 << uint(k)
+        }
+        return bit_string
     }
+    Mono := func(od, ev []int) Monomial{
+        return Monomial{int_vec_to_bit_string(od), ev}
+    }
+    
+    mstring := func(odd []int, ev string) string{
+        bit_string := int_vec_to_bit_string(odd)
+        return fmt.Sprintf("{%v %v}", bit_string, ev)
+    }
+    
     tables := []struct {
         p int
         m Monomial
         f []int
         output map[string]int
 	}{
-        {3, Mono([]int{},[]int{1}),[]int{0}, map[string]int{"{[0] [1]}" : 1, "{[1] []}": 1}},
-        {5, Mono([]int{0,2},[]int{5}),[]int{1}, map[string]int{"{[0 1 2] [5]}" : 4}},
+        {3, Mono([]int{},[]int{1}),[]int{0}, map[string]int{mstring([]int{0}, "[1]") : 1, mstring([]int{1}, "[]"): 1}},
+        {5, Mono([]int{0,2},[]int{5}),[]int{1}, map[string]int{mstring([]int{0, 1, 2}, "[5]") : 4}},
     }
     
     for _, table := range tables {
         call_str := fmt.Sprintf("MilnorProductFullQpart(%v, %v, %v)", table.p, table.m, table.f)
-        output := MilnorProductFullQpart(table.p, table.m, table.f).GetCoeffMap()
+        output := MilnorProductFullQpart(table.p, table.m, int_vec_to_bit_string(table.f)).GetCoeffMap()
         checkEqStrToIntMaps(t, call_str, table.output, output)
     }
 }
 
+
 func TestMilnorProductFull(t *testing.T) {
-    Mono := func(od, ev []int) Monomial{
-        return Monomial{od, ev}
+    int_vec_to_bit_string := func(od []int) uint64 {
+        bit_string := uint64(0)
+        for _, k := range od {
+            bit_string += 1 << uint(k)
+        }
+        return bit_string
     }
+    Mono := func(od, ev []int) Monomial{
+        return Monomial{int_vec_to_bit_string(od), ev}
+    }
+    
+    mstring := func(odd []int, ev string) string{
+        bit_string := int_vec_to_bit_string(odd)
+        return fmt.Sprintf("{%v %v}", bit_string, ev)
+    }
+    
     tables := []struct {
         p int
         r Monomial
         s Monomial
         output map[string]int
 	}{
-//        {3, Mono([]int{},[]int{1}),Mono([]int{0},[]int{}), map[string]int{"{[0] [1]}" : 1, "{[1] []}": 1}},
-        {5, Mono([]int{0,2},[]int{5}),Mono([]int{1},[]int{1}), map[string]int{"{[0 1 2] [0 1]}" : 4, "{[0 1 2] [6]}" : 4}},
-//         {7, Mono([]int{0,2,4},[]int{}),Mono([]int{1,3},[]int{}), map[string]int{"{[0 1 2 3 4] []}" : 6}},
-//         {7, Mono([]int{0,2,4},[]int{}),Mono([]int{1,5},[]int{}), map[string]int{"{[0 1 2 4 5] []}" : 1}},
-//         {3, Mono([]int{},[]int{6}),Mono([]int{},[]int{2}), map[string]int{"{[] [0 2]}" : 1, "{[] [4 1]}" : 1, "{[] [8]}" : 1}},
+        {3, Mono([]int{},[]int{1}),Mono([]int{0},[]int{}), map[string]int{mstring([]int{0}, "[1]") : 1, mstring([]int{1}, "[]") : 1}},
+        {5, Mono([]int{0,2},[]int{5}),Mono([]int{1},[]int{1}), map[string]int{mstring([]int{0, 1, 2}, "[0 1]") : 4, mstring([]int{0, 1, 2}, "[6]") : 4}},
+        {7, Mono([]int{0,2,4},[]int{}),Mono([]int{1,3},[]int{}), map[string]int{mstring([]int{0, 1, 2, 3, 4}, "[]"): 6}},
+        {7, Mono([]int{0,2,4},[]int{}),Mono([]int{1,5},[]int{}), map[string]int{mstring([]int{0, 1, 2, 4, 5}, "[]"): 1}},
+        {3, Mono([]int{},[]int{6}),Mono([]int{},[]int{2}), map[string]int{mstring([]int{}, "[0 2]") : 1, mstring([]int{}, "[4 1]") : 1, mstring([]int{}, "[8]") : 1}},
     }
     
     for _, table := range tables {
@@ -199,14 +226,14 @@ func TestBasisEven(t *testing.T){
     
     }    
     for _, table := range tables {
-        call_str := fmt.Sprintf("MilnorBasisEven(%v, %v)", table.alg, table.n)
-        output := MilnorBasisEven(table.alg, table.n)
+        call_str := fmt.Sprintf("MilnorBasis2(%v, %v)", table.alg, table.n)
+        output := MilnorBasis2(table.alg, table.n)
         checkGeneratorOfListsOutput(t, call_str, table.output, output)
     }
     
     for _, table := range length_tables {
-        call_str := fmt.Sprintf("MilnorBasisEven(%v, %v)", table.alg, table.n)
-        output := MilnorBasisEven(table.alg, table.n)
+        call_str := fmt.Sprintf("MilnorBasis2(%v, %v)", table.alg, table.n)
+        output := MilnorBasis2(table.alg, table.n)
         checkGeneratorOfListsLength(t, call_str, table.output_length, output)
     }    
 }
@@ -215,8 +242,9 @@ func TestBasisEven(t *testing.T){
 
 
 func TestBasisGenericQPart(t *testing.T){
-
+    
 }
+
 
 func TestMilnorBasisGeneric(t *testing.T){
     empty_profile := ProfileList{[]int{},false,false}
@@ -228,8 +256,15 @@ func TestMilnorBasisGeneric(t *testing.T){
         return MinimalMilnorAlgebra{p,p!=2,empty_full_profile}
     }
     
+    int_vec_to_bit_string := func(od []int) uint64 {
+        bit_string := uint64(0)
+        for _, k := range od {
+            bit_string += 1 << uint(k)
+        }
+        return bit_string
+    }
     Mono := func(od, ev []int) Monomial{
-        return Monomial{od, ev}
+        return Monomial{int_vec_to_bit_string(od), ev}
     }
 
 
@@ -239,7 +274,7 @@ func TestMilnorBasisGeneric(t *testing.T){
         output []Monomial
 	}{
         {Alg(3), 1, []Monomial{Mono([]int{0},[]int{})}},
-        {Alg(3), 9, []Monomial{Mono([]int{1},[]int{1}),Mono([]int{0},[]int{2})}},
+        {Alg(3), 9, []Monomial{Mono([]int{1},[]int{1}), Mono([]int{0},[]int{2})}},
         {Alg(3), 17, []Monomial{Mono([]int{2},[]int{}),Mono([]int{1},[]int{3}),Mono([]int{0},[]int{0,1}),Mono([]int{0},[]int{4})}},
         {Alg(5), 48, []Monomial{Mono([]int{},[]int{0, 1}),Mono([]int{},[]int{6})}},
     }
@@ -258,7 +293,7 @@ func TestMilnorBasisGeneric(t *testing.T){
     
     for _, table := range tables {
         call_str := fmt.Sprintf("MilnorBasisGeneric(%v, %v)", table.alg, table.n)
-        output := MilnorBasisGeneric(table.alg, table.n)
+        output := MilnorBasisGeneric(table.alg, table.n)        
         checkGeneratorOfMonomialsOutput(t, call_str, table.output, output)
     }
     
@@ -269,6 +304,3 @@ func TestMilnorBasisGeneric(t *testing.T){
     }    
 
 }
-
-        
-

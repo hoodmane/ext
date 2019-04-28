@@ -7,7 +7,7 @@ import (
 type EvenMonomial []int
 
 type Monomial struct {
-    odd_part []int
+    odd_part uint64
     even_part []int
 }
 
@@ -34,7 +34,7 @@ func NewZeroVector(p int, size_hint int) Vector {
     return Vector { p, make(map[string]int, size_hint), make(map[string]Monomial, size_hint) }
 }
 
-func NewBasisVector(p int, odd_part, even_part []int) Vector{
+func NewBasisVector(p int, odd_part uint64, even_part []int) Vector{
     m := Monomial{odd_part, even_part}
     coeff_map := make(map[string]int, 1)
     basis_vector_map := make(map[string]Monomial, 1)
@@ -45,7 +45,7 @@ func NewBasisVector(p int, odd_part, even_part []int) Vector{
 }
 
 func NewBasisVector2(m []int) Vector {
-    return NewBasisVector(2, []int{}, m)
+    return NewBasisVector(2, 0, m)
 }
 
 
@@ -65,7 +65,7 @@ func (v Vector) Get(m Monomial) int{
     return v.coeff_map[m.ToString()]
 }
 
-func (v Vector) Set(odd_part, even_part []int, c int){
+func (v Vector) Set(odd_part uint64, even_part []int, c int){
     m := Monomial{odd_part, even_part}
     key := m.ToString()
     v.coeff_map[key] = ModPositive(c, v.p)
@@ -73,7 +73,7 @@ func (v Vector) Set(odd_part, even_part []int, c int){
 }
 
 func (v Vector) Set2(even_part []int, c int){
-    m := Monomial{[]int{}, even_part}
+    m := Monomial{0, even_part}
     key := m.ToString()
     v.coeff_map[key] = ModPositive(c, v.p)
     v.basis_vector_map[key] = m
