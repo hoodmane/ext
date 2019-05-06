@@ -1,5 +1,6 @@
 package main
 
+/*
 import (
     "testing"
     "fmt"
@@ -338,5 +339,4 @@ func TestAdemBasisGeneric(t *testing.T){
     }
 }
 
-
-
+*/

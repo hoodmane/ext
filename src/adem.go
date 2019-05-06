@@ -9,7 +9,11 @@
 //  I have made significant improvements in code legibility.
 //
 
+
+
 package main
+
+/*
 
 import (
      "fmt"
@@ -339,3 +343,4 @@ func AdemBasisGeneric(p, n int) <- chan Monomial {
     return ademBasisGenericHelper(p, n, 1, 0)
 }
 
+*/

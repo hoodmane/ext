@@ -149,7 +149,10 @@ func TestWeightedIntegerVectors(t *testing.T) {
     for _, table := range tables {
         call_str := fmt.Sprintf("WeightedIntegerVectors(%v, %v, %v)", table.n, table.l, []int{100,100,100,100})
         gen := WeightedIntegerVectors(table.n, table.l, []int{100,100,100,100})
-        checkGeneratorOfListsOutput(t, call_str, table.output, gen)
+        error_str := checkGeneratorOfListsOutput(call_str, table.output, gen)
+        if error_str != "" {
+            t.Error(error_str)
+        }
     }    
 }
 
@@ -167,7 +170,9 @@ func TestRestrictedPartitions(t *testing.T) {
     for _, table := range tables {
         call_str := fmt.Sprintf("WeightedIntegerVectors(%v, %v, %v)", table.n, table.l, []int{1,1,1,1})
         gen := WeightedIntegerVectors(table.n, table.l, []int{1,1,1,1})
-        checkGeneratorOfListsOutput(t, call_str, table.output, gen)
-    }    
-
+        error_str := checkGeneratorOfListsOutput(call_str, table.output, gen)
+        if error_str != "" {
+            t.Error(error_str)
+        }
+    }
 }

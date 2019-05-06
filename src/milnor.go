@@ -16,14 +16,14 @@ package main
 
 import (
     "math"
-//    "fmt"
+    "fmt"
 )
 
 //func main(){
 //    empty_profile := ProfileList{[]int{},false,false}
 //    empty_full_profile := FullProfile{empty_profile, empty_profile}
 //    Alg := func(p int) MilnorAlgebra {
-//        return MinimalMilnorAlgebra{p,p!=2,empty_full_profile}
+//        return MilnorAlgebra{p,p!=2,empty_full_profile}
 //    }
 //    
 //    for x := range MilnorBasisGenericQpart(3,(uint64(1) << uint(10))-1, 22){
@@ -42,23 +42,13 @@ type FullProfile struct {
     even_part Profile
 }
 
-type Profile interface {
-    getExponent(int, int) int
-    getIndex(int) int
-    restrictedQ() bool
-}
-
-type ProfileList struct {
+type Profile struct {
     profile []int
     truncated bool
     restricted bool
 }
 
-type ProfileFunction struct {
-    profile_func func(int) int
-}
-
-func (P ProfileList) getIndex(index int) int{
+func (P Profile) getIndex(index int) int{
     if index < len(P.profile) {
         return P.profile[index]
     } 
@@ -68,7 +58,7 @@ func (P ProfileList) getIndex(index int) int{
     return math.MaxInt32
 }
 
-func (P ProfileList) getExponent(p, index int) int{
+func (P Profile) getExponent(p, index int) int{
     if index < len(P.profile) {
         return pow(p, P.profile[index])
     } 
@@ -78,66 +68,286 @@ func (P ProfileList) getExponent(p, index int) int{
     return math.MaxInt32
 }
 
-func (P ProfileList) restrictedQ() bool{
-    return P.restricted
-}
-
-func (P ProfileFunction) getIndex(index int) int {
-    return P.profile_func(index)
-}
-
-func (P ProfileFunction) getExponent(p, index int) int {
-    n := P.profile_func(index)
-    if n >= math.MaxInt32 {
-        return n
-    } else {
-        return pow(p, n)
-    }
-}
 
 type MilnorElement struct {
     Vector
-    generic bool
 }
 
-type MilnorAlgebra interface {
-    getPrime() int
-    genericQ() bool
-    getProfile() FullProfile
-}
-
-type MinimalMilnorAlgebra struct {
+type MilnorAlgebra struct {
     p int
     generic bool
     profile FullProfile
+    name string
 }
 
-func (A MinimalMilnorAlgebra) getPrime() int {
-    return A.p
+func (A MilnorAlgebra) String() string {
+    if A.name == "" {
+        name := fmt.Sprintf("{%v, %v", A.p, A.generic)
+        if(!A.profile.even_part.restricted && !A.profile.odd_part.restricted){
+            name += "}"
+        } else {
+            name += fmt.Sprintf("%v}", A.profile)
+        }
+        A.name = name
+    }
+    return A.name
 }
 
-func (A MinimalMilnorAlgebra) genericQ() bool {
-    return A.generic
+
+
+
+type Q_part struct {
+    bit_string uint64
+    degree int
 }
 
-func (A MinimalMilnorAlgebra) getProfile() FullProfile {
-    return A.profile
+type MilnorBasisElement struct {
+    q_degree int
+    q_part uint64
+    p_degree int
+    p_part []int
 }
 
-func NewMilnorZeroVector2(size_hint int) MilnorElement {
-    return MilnorElement{NewZeroVector(2, size_hint), false}
+func (m MilnorBasisElement) String() string{
+    return fmt.Sprintf("{%v %v}", m.q_part, m.p_part)
 }
 
-func NewMilnorZeroVectorGeneric(p, size_hint int) MilnorElement {
-    return MilnorElement{NewZeroVector(p, size_hint), true}
+
+var milnor_basis_table = make(map[string] [][]MilnorBasisElement)
+var milnor_basis_name_to_index_map = make(map[string] [] map[string] MonomialIndex)
+
+func MilnorBasisEven(xi_degrees []int, profile_list []int, n int) <-chan []int {
+    ch := make(chan []int, 20)
+    go func(){
+        defer close(ch)
+        for exponents := range WeightedIntegerVectors(n, xi_degrees, profile_list) {
+            exponents = remove_trailing_zeroes(exponents)
+            ch <- exponents
+        }
+    }()
+    return ch
 }
 
-func NewMilnorBasisVector2(even_part []int) MilnorElement{
-    return MilnorElement{NewBasisVector2(even_part), false}
+var milnor_basis_Q_table = make(map[int] [][]Q_part)
+var milnor_basis_Q_table_size = make(map[int] int)
+var tau_degrees = make(map[int] []int)
+var xi_degrees  = make(map[int] []int)
+
+func generateMilnorBasisQpartTable(p int, n int){
+    q := 2*(p-1)
+    table, ok := milnor_basis_Q_table[p]
+    prev_dim := milnor_basis_Q_table_size[p]
+    bit_string_min := uint64(1) << uint(prev_dim)    
+    if !ok {
+        milnor_basis_Q_table[p] = make([][]Q_part, q) 
+        table = milnor_basis_Q_table[p]
+        for residue := 0; residue < q; residue ++ {
+            table[residue] = make([]Q_part, 0, 10)
+        }  
+        table[0] = append(table[0], Q_part{0, 0})
+    }
+    milnor_basis_Q_table_size[p] = len(tau_degrees[p])    
+    bit_string_max := uint64(1) 
+    bit_string_max <<= uint(len(tau_degrees[p]))
+    total := 0
+    //The total starts out as tau_degrees[prev_dim] but we update by tau_degrees[prev_dim] - Sum(smaller tau_i's).
+    //So initialize total = Sum(smaller tau_i's)
+    for i := 0; i < prev_dim; i++ {
+        total += tau_degrees[p][i]
+    }
+    //The residue starts out as 1, but we update by 1 - # of trailing 0's.     
+    //On the first pass, # of trailing 0's is prev_dim, so initialize residue = prev_dim 
+    residue := prev_dim 
+    for bit_string := bit_string_min;  bit_string < bit_string_max; bit_string++ {
+         // Iterate over trailing zero bits
+         v := (bit_string ^ (bit_string - 1)) >> 1
+         c := 0 // c is counting the number of zero bits at the end of bit_string.
+         for ; v !=0 ; c++ {
+             v >>= 1;
+             total -= tau_degrees[p][c]
+         }
+         total += tau_degrees[p][c]
+         // residue is the number of 1's in bit_string mod q. 
+         // c bits were unset when we incremented and one new bit was set so we have to add 1 - c.
+         residue += 1 - c
+         residue = ModPositive(residue, q)
+         table[residue] = append(table[residue], Q_part{bit_string, total})
+     }
 }
 
-func NewMilnorBasisVectorGeneric(p int, odd_part uint64, even_part []int) MilnorElement{
-    return MilnorElement{NewBasisVector(p, odd_part, even_part), true}
+// Returns the "Q-part" of the basis in degree q_deg.
+// This means return the set of monomials Q(i_1) * ... * Q(i_k) where i_1 < ... < i_k
+// and the product is in q_deg. Basically it's just an issue of finding partitions of
+// q_deg into parts of size |Q(i_j)|, and then there's a profile condition.
+func MilnorBasisGenericQpart(p int, profile uint64, n int) <-chan Q_part {
+    ch := make(chan Q_part, 20)
+    go func(){
+        defer close(ch)
+        if NumTausLeqN(n, p) > milnor_basis_Q_table_size[p] {
+            generateMilnorBasisQpartTable(p, n)
+        }
+        tau_monomial_list := milnor_basis_Q_table[p][n % (2*p - 2)]
+        for _, tau_mono := range tau_monomial_list {
+            if tau_mono.degree > n {
+                return
+            }
+            if tau_mono.bit_string & (^profile) == 0 {
+               ch <- tau_mono
+            }
+        }
+    }()
+    return ch
+}
+
+
+func GenerateMilnorBasis(algebra MilnorAlgebra, n int) {
+    algebra_name := algebra.String()
+    p := algebra.p
+    tau_degrees[p] = TauDegrees(n, p)
+    xi_degrees[p] = XiDegrees(n, p)  
+    
+    table, ok := milnor_basis_table[algebra_name]
+    old_n := len(table) - 1
+    
+    if !ok {
+        milnor_basis_table[algebra_name] = make([][]MilnorBasisElement, n + 1)
+        milnor_basis_name_to_index_map[algebra_name] = make([]map[string] MonomialIndex, n + 1)
+        table = milnor_basis_table[algebra_name]
+    }
+    name_table := milnor_basis_name_to_index_map[algebra_name]
+    
+    if cap(table) < n {
+        new_table := make([][]MilnorBasisElement, n + 1)
+        copy(new_table, table)
+        milnor_basis_table[algebra_name] = new_table
+        table = new_table
+        
+        new_name_table := make([]map[string] MonomialIndex, n + 1)
+        copy(new_name_table, name_table)
+        milnor_basis_name_to_index_map[algebra_name] = new_name_table
+        name_table = new_name_table
+    }
+    
+    for k := old_n + 1; k <= n; k++ {
+        table[k] = make([]MilnorBasisElement, 0, 10)
+        name_table[k] = make(map[string] MonomialIndex)
+    }
+    
+    if algebra.generic {
+        GenerateMilnorBasisGeneric(algebra, old_n, n)
+    } else {
+        GenerateMilnorBasis2(algebra, old_n, n)
+    }
+}
+
+func GenerateMilnorBasis2(algebra MilnorAlgebra, old_n, n int){
+    algebra_name := algebra.String()
+    p := algebra.p
+    profile := algebra.profile.even_part
+    
+    table := milnor_basis_table[algebra_name]
+    name_table := milnor_basis_name_to_index_map[algebra_name]
+    
+    profile_list := make([]int, len(xi_degrees[p]))
+    for idx := range xi_degrees[p] {
+        profile_list[idx] = profile.getExponent(p, idx) - 1
+    }
+    for k := old_n + 1; k <= n; k++ {
+        for x := range MilnorBasisEven(xi_degrees[p], profile_list, k) {
+            m := MilnorBasisElement{0, 0, k, x}
+            table[k] = append(table[k], m)
+            name_table[k][m.String()] = MonomialIndex{uint(k), uint(len(table[k]) - 1)}
+        }
+    }
+}
+
+func GenerateMilnorBasisGeneric(algebra MilnorAlgebra, old_n, n int){
+    algebra_name := algebra.String()
+    table := milnor_basis_table[algebra_name]
+    name_table := milnor_basis_name_to_index_map[algebra_name]    
+    
+    for k := old_n + 1; k <= n; k++ {
+        for x := range MilnorBasisGeneric(algebra, k) {
+            table[k] = append(table[k], x)
+            name_table[k][x.String()] = MonomialIndex{uint(k), uint(len(table[k]) - 1)}
+        }
+    }
+}
+
+// Return the even part of the basis in degree n * 2*(p-1).
+// In the nongeneric case, this actually just gets the whole degree n basis.
+// Note the factor of two difference between 2*(2-1) and 1.
+func MilnorBasis2(algebra MilnorAlgebra, n int) <-chan []int {
+    profile := algebra.profile.even_part
+    p := algebra.p
+    profile_list := make([]int, len(xi_degrees[p]))
+    for idx := range xi_degrees[p] {
+        profile_list[idx] = profile.getExponent(p, idx) - 1
+    }
+    return MilnorBasisEven(xi_degrees[p], profile_list, n)
+}
+
+// Get the basis in degree n for the generic steenrod algebra at the prime p.
+// We just put together the "even part" of the basis and the "Q part".
+func MilnorBasisGeneric(algebra MilnorAlgebra, n int) <-chan MilnorBasisElement {
+    ch := make(chan MilnorBasisElement, 20)
+    p := algebra.p
+    num_taus := NumTausLeqN(n, p)
+    full_profile := algebra.profile
+    odd_profile := uint64(0)
+    for idx := 0; idx < num_taus; idx ++ {
+        if full_profile.odd_part.getIndex(idx) > 0 {
+            odd_profile += 1 << uint(idx)
+        }
+    }    
+    even_profile_list := make([]int, len(xi_degrees[p]))
+    for idx := range xi_degrees[p] {
+        even_profile_list[idx] = full_profile.even_part.getExponent(p, idx) - 1
+    }    
+    go func(){
+        defer close(ch)
+        if n == 0 {
+            ch <- MilnorBasisElement{0, 0, 0, []int {}}
+            return
+        }
+        // p_deg records the desired degree of the P part of the basis element.
+        // Since p-parts are always divisible by 2p-2, we divide by this first.
+        // pow(p, -1) returns 1, so min_q_deg is 0 if q divides n evenly.
+        for qs_q_deg := range MilnorBasisGenericQpart(p, odd_profile, n){
+            q_part := qs_q_deg.bit_string
+            q_deg := qs_q_deg.degree
+            p_deg := (n - q_deg) / (2*(p-1))
+            P_parts := MilnorBasisEven(xi_degrees[p], even_profile_list, p_deg)
+            for p_part := range P_parts {
+                ch <- MilnorBasisElement{q_deg, q_part, 2*(p-1)*p_deg, p_part}
+            }
+        }
+    }()
+    return ch
+}
+
+func GetMilnorBasisElementFromIndex(algebra MilnorAlgebra, idx MonomialIndex) MilnorBasisElement{
+    return milnor_basis_table[algebra.String()][idx.degree][idx.index]
+}
+
+func GetIndexFromMilnorBasisElement(algebra MilnorAlgebra, b MilnorBasisElement) MonomialIndex{
+    return milnor_basis_name_to_index_map[algebra.String()][b.q_degree + b.p_degree][b.String()]
+}
+
+func NewMilnorZeroVector(p, size_hint int) MilnorElement {
+    return MilnorElement{NewZeroVector(p, size_hint)}
+}
+
+func NewMilnorBasisVector2(algebra MilnorAlgebra, deg int,  even_part []int) MilnorElement{
+    return MilnorElement{NewBasisVector(2, 
+        GetIndexFromMilnorBasisElement(algebra, MilnorBasisElement{0, 0, deg, even_part})),
+    }
+}
+
+func NewMilnorBasisVectorGeneric(algebra MilnorAlgebra, odd_deg int, odd_part uint64, even_deg int, even_part []int) MilnorElement {
+    return MilnorElement{NewBasisVector(algebra.p, 
+        GetIndexFromMilnorBasisElement(algebra, MilnorBasisElement{odd_deg, odd_part, even_deg, even_part})),
+    }
 }
 
 
@@ -260,8 +470,12 @@ func min(a, b int) int{
 
 // Handles the multiplication in the even subalgebra of the Steenrod algebra P.
 // When p = 2, this is isomorphic to the whole Steenrod algebra so this method does everything.
-func MilnorProductEven(p int, r, s []int) MilnorElement {
-    result := NewMilnorZeroVectorGeneric(p, -1)
+func MilnorProductEven(algebra MilnorAlgebra, r_elt, s_elt MilnorBasisElement) MilnorElement {
+    p := algebra.p
+    result := NewMilnorZeroVector(p, -1)
+    r := r_elt.p_part
+    s := s_elt.p_part
+    output_degree := (r_elt.p_degree + s_elt.p_degree)
     rows := len(r) + 1
     cols := len(s) + 1
     diags := len(r) + len(s)
@@ -289,8 +503,9 @@ func MilnorProductEven(p int, r, s []int) MilnorElement {
         }
         if coeff != 0 {
             diagonal_sums = remove_trailing_zeroes(diagonal_sums)
-            m := Monomial{0, diagonal_sums}
-            result.AddBasisVector(m, coeff)
+            m := MilnorBasisElement{0, 0, output_degree, diagonal_sums}
+            idx := GetIndexFromMilnorBasisElement(algebra, m)
+            result.AddBasisVector(idx, coeff)
         }
     }
     return result
@@ -308,47 +523,61 @@ func inListQ(l []int, n int) bool{
 
 // Reduce m1 * f = (Q_e0 Q_e1 ... P(r1, r2, ...)) * (Q_f0 Q_f1 ...) into the form Sum of Q's * P's
 // Result is represented as dictionary of pairs of tuples.
-func MilnorProductFullQpart(p int, m1 Monomial, f uint64) MilnorElement{
-    result := NewMilnorBasisVectorGeneric(p, m1.odd_part, m1.even_part)
+func MilnorProductFullQpart(algebra MilnorAlgebra, m1 MilnorBasisElement, f uint64) MilnorElement{
+    p := algebra.p
+    var q int
+    if algebra.generic {
+        q = 2*p-2
+    } else {
+        q = 1
+    }
+    p_degree := m1.p_degree
+    q_degree := m1.q_degree
+    result := NewMilnorBasisVectorGeneric(algebra, q_degree, m1.q_part, p_degree, m1.p_part)
     for k := 0; f & ^((1 << uint(k)) - 1) != 0; k++ {
         if f & (1 << uint(k)) == 0 {
             continue
         }
+        q_degree += tau_degrees[p][k]
         old_result := result
-        result = NewMilnorZeroVectorGeneric(p, -1)
+        result = NewMilnorZeroVector(p, -1)
         p_to_the_k := pow(p, k)
-        for key, mono := range old_result.GetBasisVectorMap() {
-            for i := 0; i < len(mono.even_part) + 1; i++ {
-                q_mono := mono.odd_part
-                p_mono := mono.even_part
-                if q_mono & (1 << uint(k+i)) != 0 {
+        for idx, coeff := range old_result.GetCoeffMap() {
+            mono := GetMilnorBasisElementFromIndex(algebra, idx)
+            for i := 0; i < len(mono.p_part) + 1; i++ {
+                if mono.q_part & (1 << uint(k+i)) != 0 {
                     continue
                 }
-                // Make sure p_mono[i - 1] is large enough to deduct p^k from it
-                if i > 0 && p_mono[i - 1] < p_to_the_k {
+                // Make sure mono.p_part[i - 1] is large enough to deduct p^k from it
+                if i > 0 && mono.p_part[i - 1] < p_to_the_k {
                     continue 
                 }
-                
+
+                q_mono := mono.q_part
+                q_degree := mono.q_degree
+                p_mono := mono.p_part
+                p_degree = mono.p_degree
                 if i > 0 {
                     new_p_mono := make([]int, len(p_mono))
                     copy(new_p_mono, p_mono)
                     new_p_mono[i - 1] -= p_to_the_k
-                    p_mono = remove_trailing_zeroes(new_p_mono)                
+                    p_mono = remove_trailing_zeroes(new_p_mono) 
+                    p_degree -= q * p_to_the_k * xi_degrees[p][i-1]
                 }
-                
+
                 // insert(q_mono, len(q_mono) - qs_gt_k_plus_i, k+i)
                 q_mono += 1 << uint(k+i)
+                q_degree += tau_degrees[p][k+i]
                 
                 larger_Qs := 0
-                
-                for idx := k + i + 1; idx < 63; idx ++ {
-                    if q_mono & (1 << uint(idx)) != 0 {
-                        larger_Qs ++
-                    }
+                v := q_mono >> uint(k + i + 1)
+                for  ; v != 0; v >>= 1 {
+                    larger_Qs += int(v & 1);
                 }
-                coeff := MinusOneToTheN(larger_Qs) * old_result.GetCoeffMap()[key]
+                coeff *= MinusOneToTheN(larger_Qs)
                 
-                result.AddBasisVector(Monomial{q_mono, p_mono}, coeff)
+                out_idx := GetIndexFromMilnorBasisElement(algebra, MilnorBasisElement{q_degree, q_mono, p_degree, p_mono})
+                result.AddBasisVector(out_idx, coeff)
             }
         }
     }
@@ -372,267 +601,49 @@ func MilnorProductFullQpart(p int, m1 Monomial, f uint64) MilnorElement{
 // This computes the product of the Milnor basis elements
 // $Q_{e_1} Q_{e_2} ... P(r_1, r_2, ...)$ and
 // $Q_{f_1} Q_{f_2} ... P(s_1, s_2, ...)$.
-func MilnorProductFull(p int, m1, m2 Monomial) MilnorElement {
-    f := m2.odd_part
-    s := m2.even_part
-    m1_times_f := MilnorProductFullQpart(p, m1, f)
+func MilnorProductFull(algebra MilnorAlgebra, m1, m2 MilnorBasisElement) MilnorElement {
+    p := algebra.p
+    s := MilnorBasisElement{0, 0, m2.p_degree, m2.p_part}
+    m1_times_f := MilnorProductFullQpart(algebra, m1, m2.q_part)
     // Now for the Milnor matrices.  For each entry '(e,r): coeff' in answer,
     // multiply r with s.  Record coefficient for matrix and multiply by coeff.
     // Store in 'result'.
-    if len(s) == 0 {
+    if len(m2.p_part) == 0 {
         return m1_times_f
     }
     
-    result := NewMilnorZeroVectorGeneric(p, -1)
-    m1_times_f_coeff_map := m1_times_f.GetCoeffMap()
-    for key, e_r := range m1_times_f.GetBasisVectorMap() {
-        e := e_r.odd_part
-        r := e_r.even_part
-        coeff := m1_times_f_coeff_map[key]
-        prod := MilnorProductEven(p, r, s)
-        prod_coeff_map := prod.GetCoeffMap()
-        for key, m := range prod.GetBasisVectorMap() {
-            m  = Monomial{e, m.even_part}
-            c := prod_coeff_map[key]
-            result.AddBasisVector(m, coeff*c)
+    result := NewMilnorZeroVector(p, -1)
+    for er_idx, coeff := range m1_times_f.GetCoeffMap() {
+        er_mono := GetMilnorBasisElementFromIndex(algebra, er_idx)
+        r := MilnorBasisElement{0, 0, er_mono.p_degree, er_mono.p_part}
+        prod := MilnorProductEven(algebra, r, s)
+        for idx, c := range prod.GetCoeffMap() {
+            m := GetMilnorBasisElementFromIndex(algebra, idx)
+            m  = MilnorBasisElement{er_mono.q_degree, er_mono.q_part, m.p_degree, m.p_part}
+            out_idx := GetIndexFromMilnorBasisElement(algebra, m)
+            result.AddBasisVector(out_idx, coeff*c)
         }
     }
     return result
 }
 
 // Multiplication of Milnor basis elements in the non generic case.
-func MilnorProduct2(r, s []int) MilnorElement {
-    return MilnorProductEven(2, r, s)
+func MilnorProduct2(algebra MilnorAlgebra, r, s MilnorBasisElement) MilnorElement {
+    return MilnorProductEven(algebra, r, s)
 }
 
-func MilnorProductGeneric(p int, r, s Monomial) MilnorElement {
-    return MilnorProductFull(p, r, s)
+func MilnorProductGeneric(algebra MilnorAlgebra, r, s MilnorBasisElement) MilnorElement {
+    return MilnorProductFull(algebra, r, s)
 }
 
 
 // Multiply r and s in the Milnor algebra determined by algebra.
 // Note that since profile functions determine subalgebras, the product
 // doesn't need to care about the profile function at all.
-func MilnorProduct(algebra MilnorAlgebra, r, s Monomial) MilnorElement {
-    if algebra.genericQ() {
-        return MilnorProductFull(algebra.getPrime(), r, s)
+func MilnorProduct(algebra MilnorAlgebra, r, s MilnorBasisElement) MilnorElement {
+    if algebra.generic {
+        return MilnorProductFull(algebra, r, s)
     } else {
-        return MilnorProductEven(algebra.getPrime(), r.even_part, s.even_part)
+        return MilnorProductEven(algebra, r, s)
     }
 }
-
-func MilnorBasisEven(p int, xi_degrees []int, profile_list []int, n int) <-chan []int {
-    ch := make(chan []int, 20)
-    go func(){
-        defer close(ch)
-        if n == 0 {
-            ch <- []int{}
-            return
-        }   
-        
-        for exponents := range WeightedIntegerVectors(n, xi_degrees, profile_list) {
-            exponents = remove_trailing_zeroes(exponents)
-            ch <- exponents
-        }
-    }()
-    return ch
-}
-
-type Q_part struct {
-    bit_string uint64
-    degree int
-}
-
-var milnor_basis_Q_table = make(map[int] [][]Q_part)
-var milnor_basis_Q_table_size = make(map[int] int)
-
-func generateMilnorBasisQpartTable(p int, n int){
-    q := 2*(p-1)
-    tau_degrees := TauDegrees(n, p)
-    table, ok := milnor_basis_Q_table[p]
-    prev_dim := milnor_basis_Q_table_size[p]
-    bit_string_min := uint64(1) << uint(prev_dim)    
-    if !ok {
-        milnor_basis_Q_table[p] = make([][]Q_part, q) 
-        table = milnor_basis_Q_table[p]
-        for residue := 0; residue < q; residue ++ {
-            table[residue] = make([]Q_part, 0, 10)
-        }  
-        table[0] = append(table[0], Q_part{0, 0})
-    }
-    milnor_basis_Q_table_size[p] = len(tau_degrees)    
-    bit_string_max := uint64(1) 
-    bit_string_max <<= uint(len(tau_degrees))
-    total := 0
-    //The total starts out as tau_degrees[prev_dim] but we update by tau_degrees[prev_dim] - Sum(smaller tau_i's).
-    //So initialize total = Sum(smaller tau_i's)
-    for i := 0; i < prev_dim; i++ {
-        total += tau_degrees[i]
-    }
-    //The residue starts out as 1, but we update by 1 - # of trailing 0's.     
-    //On the first pass, # of trailing 0's is prev_dim, so initialize residue = prev_dim 
-    residue := prev_dim 
-    for bit_string := bit_string_min;  bit_string < bit_string_max; bit_string++ {
-         // Iterate over trailing zero bits
-         v := (bit_string ^ (bit_string - 1)) >> 1
-         c := 0
-         for ; v !=0 ; c++ {
-             v >>= 1;
-             total -= tau_degrees[c]
-         }
-         total += tau_degrees[c]
-         residue = ModPositive(residue + 1 - c, q)        
-         table[residue] = append(table[residue], Q_part{bit_string, total})
-     }
-}
-
-// Returns the "Q-part" of the basis in degree q_deg.
-// This means return the set of monomials Q(i_1) * ... * Q(i_k) where i_1 < ... < i_k
-// and the product is in q_deg. Basically it's just an issue of finding partitions of
-// q_deg into parts of size |Q(i_j)|, and then there's a profile condition.
-func MilnorBasisGenericQpart(p int, profile uint64, n int) <-chan Q_part {
-    ch := make(chan Q_part, 20)
-    go func(){
-        defer close(ch)
-        if NumTausLeqN(n, p) > milnor_basis_Q_table_size[p] {
-            generateMilnorBasisQpartTable(p, n)
-        }
-        tau_monomial_list := milnor_basis_Q_table[p][n % (2*p - 2)]
-        for _, tau_mono := range tau_monomial_list {
-            if tau_mono.degree > n {
-                return
-            }
-            if tau_mono.bit_string & (^profile) == 0 {
-               ch <- tau_mono
-            }
-        }
-    }()
-    return ch
-}
-
-
-// Return the even part of the basis in degree n * 2*(p-1).
-// In the nongeneric case, this actually just gets the whole degree n basis.
-// Note the factor of two difference between 2*(2-1) and 1.
-func MilnorBasis2(algebra MilnorAlgebra, n int) <-chan []int {
-    profile := algebra.getProfile().even_part
-    p := algebra.getPrime()
-    xi_degrees := XiDegrees(n, p)
-    profile_list := make([]int, len(xi_degrees))
-    for idx := range xi_degrees {
-        profile_list[idx] = profile.getExponent(p, idx) - 1
-    }
-    return MilnorBasisEven(p, xi_degrees, profile_list, n)
-}
-
-// Get the basis in degree n for the generic steenrod algebra at the prime p.
-// We just put together the "even part" of the basis and the "Q part".
-func MilnorBasisGeneric(algebra MilnorAlgebra, n int) <-chan Monomial{
-    ch := make(chan Monomial, 20)
-    p := algebra.getPrime()
-    xi_degrees := XiDegrees(n, p)
-    num_taus := NumTausLeqN(n, p)
-    full_profile := algebra.getProfile()
-    odd_profile := uint64(0)
-    for idx := 0; idx < num_taus; idx ++ {
-        if full_profile.odd_part.getIndex(idx) > 0 {
-            odd_profile += 1 << uint(idx)
-        }
-    }    
-    even_profile_list := make([]int, len(xi_degrees))
-    for idx := range xi_degrees {
-        even_profile_list[idx] = full_profile.even_part.getExponent(p, idx) - 1
-    }    
-    go func(){
-        defer close(ch)
-        if n == 0 {
-            ch <- Monomial{0, []int {}}
-            return
-        }
-        // p_deg records the desired degree of the P part of the basis element.
-        // Since p-parts are always divisible by 2p-2, we divide by this first.
-        // pow(p, -1) returns 1, so min_q_deg is 0 if q divides n evenly.
-        for qs_q_deg := range MilnorBasisGenericQpart(p, odd_profile, n){
-            q_part := qs_q_deg.bit_string
-            q_deg := qs_q_deg.degree
-            p_deg := (n - q_deg) / (2*(p-1))
-            P_parts := MilnorBasisEven(p, xi_degrees, even_profile_list, p_deg)
-            for p_part := range P_parts {
-                ch <- Monomial{q_part, p_part}
-            }
-        }
-    }()
-    return ch
-}
-// 
-// 
-// def basis(n, *, algebra):
-//     r"""
-//     Milnor basis in dimension `n` with profile function ``profile``.
-// 
-//     INPUT:
-// 
-//     - ``n`` - non-negative integer
-// 
-//     - ``p`` - positive prime number
-// 
-//     - ``profile`` - profile function (optional, default None).
-//       Together with ``truncation_type``, specify the profile function
-//       to be used; None means the profile function for the entire
-//       Steenrod algebra.  See
-//       :mod:`sage.algebras.steenrod.steenrod_algebra` and
-//       :func:`SteenrodAlgebra <sage.algebras.steenrod.steenrod_algebra.SteenrodAlgebra>`
-//       for information on profile functions.
-// 
-//     - ``truncation_type`` - truncation type, either 0 or Infinity
-//       (optional, default Infinity if no profile function is specified,
-//       0 otherwise)
-// 
-//     OUTPUT: tuple of mod p Milnor basis elements in dimension n
-// 
-//     At the prime 2, the Milnor basis consists of symbols of the form
-//     `\text{Sq}(m_1, m_2, ..., m_t)`, where each
-//     `m_i` is a non-negative integer and if `t>1`, then
-//     `m_t \neq 0`. At odd primes, it consists of symbols of the
-//     form `Q_{e_1} Q_{e_2} ... P(m_1, m_2, ..., m_t)`,
-//     where `0 \leq e_1 < e_2 < ...`, each `m_i` is a
-//     non-negative integer, and if `t>1`, then
-//     `m_t \neq 0`.
-// 
-//     EXAMPLES::
-// 
-//         sage: import milnor
-//         sage: milnor.basis(7)
-//         ((0, 0, 1), (1, 2), (4, 1), (7,))
-//         sage: milnor.basis(7, 2)
-//         ((0, 0, 1), (1, 2), (4, 1), (7,))
-//         sage: milnor.basis(4, 2)
-//         ((1, 1), (4,))
-//         sage: milnor.basis(4, 2, profile=[2,1])
-//         ((1, 1),)
-//         sage: milnor.basis(4, 2, profile=(), truncation_type=0)
-//         ()
-//         sage: milnor.basis(4, 2, profile=(), truncation_type=Infinity)
-//         ((1, 1), (4,))
-//         sage: milnor.basis(9, 3)
-//         (((1,), (1,)), ((0,), (2,)))
-//         sage: milnor.basis(17, 3)
-//         (((2,), ()), ((1,), (3,)), ((0,), (0, 1)), ((0,), (4,)))
-//         sage: milnor.basis(48, p=5)
-//         (((), (0, 1)), ((), (6,)))
-//         sage: len(milnor.basis(100,3))
-//         13
-//         sage: len(milnor.basis(200,7))
-//         0
-//         sage: len(milnor.basis(240,7))
-//         3
-//         sage: len(milnor.basis(240,7, profile=((),()), truncation_type=Infinity))
-//         3
-//         sage: len(milnor.basis(240,7, profile=((),()), truncation_type=0))
-//         0
-//     """
-//     if algebra.generic:
-//         return basis_generic(n, algebra.p, algebra.profile)
-//     else:
-//         return basis_even(n, 2, algebra.profile)
-
